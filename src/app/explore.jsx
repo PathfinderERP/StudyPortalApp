@@ -3,13 +3,13 @@ import { SymbolView } from 'expo-symbols';
 import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { ExternalLink } from '@/components/external-link.jsx';
+import { ThemedText } from '@/components/themed-text.jsx';
+import { ThemedView } from '@/components/themed-view.jsx';
+import { Collapsible } from '@/components/ui/collapsible.jsx';
+import { WebBadge } from '@/components/web-badge.jsx';
+import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme.js';
+import { useTheme } from '@/hooks/use-theme.js';
 
 export default function TabTwoScreen() {
   const safeAreaInsets = useSafeAreaInsets();
@@ -61,11 +61,11 @@ export default function TabTwoScreen() {
         <ThemedView style={styles.sectionsWrapper}>
           <Collapsible title="File-based routing">
             <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
+              This app has two screens: <ThemedText type="code">src/app/index.jsx</ThemedText> and{' '}
+              <ThemedText type="code">src/app/explore.jsx</ThemedText>
             </ThemedText>
             <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
+              The layout file in <ThemedText type="code">src/app/_layout.jsx</ThemedText> sets up
               the tab navigator.
             </ThemedText>
             <ExternalLink href="https://docs.expo.dev/router/introduction">
