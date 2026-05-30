@@ -4,7 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import { ThemedText } from './themed-text.jsx';
 import { ThemedView } from './themed-view.jsx';
 
-import { Spacing } from '@/constants/theme.js';
+import { Spacing } from '../constants/theme.js';
 
 
 

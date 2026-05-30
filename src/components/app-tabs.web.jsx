@@ -13,7 +13,7 @@ import { ExternalLink } from './external-link.jsx';
 import { ThemedText } from './themed-text.jsx';
 import { ThemedView } from './themed-view.jsx';
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme.js';
+import { Colors, MaxContentWidth, Spacing } from '../constants/theme.js';
 
 export default function AppTabs() {
   return (

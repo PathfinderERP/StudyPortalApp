@@ -2,12 +2,12 @@ import * as Device from 'expo-device';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon.jsx';
-import { HintRow } from '@/components/hint-row.jsx';
-import { ThemedText } from '@/components/themed-text.jsx';
-import { ThemedView } from '@/components/themed-view.jsx';
-import { WebBadge } from '@/components/web-badge.jsx';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme.js';
+import { AnimatedIcon } from '../components/animated-icon.jsx';
+import { HintRow } from '../components/hint-row.jsx';
+import { ThemedText } from '../components/themed-text.jsx';
+import { ThemedView } from '../components/themed-view.jsx';
+import { WebBadge } from '../components/web-badge.jsx';
+import { BottomTabInset, MaxContentWidth, Spacing } from '../constants/theme.js';
 
 function getDevMenuHint() {
   if (Platform.OS === 'web') {
@@ -33,7 +33,7 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.heroSection}>
-          // <AnimatedIcon />
+          {/* <AnimatedIcon /> */}
           <ThemedText type="title" style={styles.title}>
             Welcome to&nbsp;Expo
           </ThemedText>
