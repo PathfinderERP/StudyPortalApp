@@ -28,16 +28,26 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return;
 
-    const inDashboard = segments[0] === 'dashboard';
+    async function verifyAndNavigate() {
+      try {
+        const token = await storage.getItem('userToken');
+        const tokenExists = !!token;
+        const inDashboard = segments[0] === 'dashboard';
 
-    if (!hasToken && inDashboard) {
-      // If not logged in and trying to access dashboard, redirect to login
-      router.replace('/');
-    } else if (hasToken && !inDashboard) {
-      // If logged in and on the login/landing screen, redirect to dashboard
-      router.replace('/dashboard');
+        if (!tokenExists && inDashboard) {
+          // If not logged in and trying to access dashboard, redirect to login
+          router.replace('/');
+        } else if (tokenExists && !inDashboard) {
+          // If logged in and on the login/landing screen, redirect to dashboard
+          router.replace('/dashboard');
+        }
+      } catch (err) {
+        console.error('Error verifying auth:', err);
+      }
     }
-  }, [hasToken, segments, loading]);
+
+    verifyAndNavigate();
+  }, [segments, loading]);
 
   if (loading) {
     return (

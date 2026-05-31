@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -12,12 +12,17 @@ import {
   TextInput,
   FlatList,
   useWindowDimensions,
+  TouchableOpacity,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontAwesome, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Video, ResizeMode } from 'expo-av';
+import * as WebBrowser from 'expo-web-browser';
+import { Linking } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 import { Colors } from '../constants/theme';
 import { ThemedText } from '../components/themed-text';
@@ -25,6 +30,297 @@ import { useColorScheme } from '../hooks/use-color-scheme';
 import { storage } from '../utils/storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Dynamic Study Materials fallback generators based on student profile (Class and Exam/Course Type)
+function getDynamicFallbackVideos(studentData) {
+  const className = String(studentData?.className || 'Class 11');
+  const examType = String(studentData?.examType || 'JEE');
+  
+  const isClass11 = className.includes('11');
+  const isClass12 = className.includes('12');
+  const isNEET = examType.toUpperCase() === 'NEET' || examType.toLowerCase().includes('medical') || examType.toLowerCase().includes('biology') || examType.toLowerCase().includes('neet');
+  const isJEE = examType.toUpperCase() === 'JEE' || examType.toLowerCase().includes('engineering') || examType.toLowerCase().includes('jee');
+
+  if (isClass11 && isJEE) {
+    return [
+      { id: 'v1', title: '1D Kinematics: Equations of Motion & Graphs', subject: 'Physics', duration: '42:15', teacher: 'Dr. R. K. Sen', views: '2.5k', chapter: 'Kinematics' },
+      { id: 'v2', title: 'Mole Concept & Stoichiometry Principles', subject: 'Chemistry', duration: '55:30', teacher: 'Prof. S. Sharma', views: '1.8k', chapter: 'Mole Concept' },
+      { id: 'v3', title: 'Trigonometric Ratios, Identities & Formulas', subject: 'Mathematics', duration: '1:12:00', teacher: 'Dr. Anita Roy', views: '3.1k', chapter: 'Trigonometry' },
+      { id: 'v4', title: 'Newton\'s Laws of Motion & Friction Forces', subject: 'Physics', duration: '38:40', teacher: 'Dr. R. K. Sen', views: '1.2k', chapter: 'Laws of Motion' },
+      { id: 'v5', title: 'Chemical Bonding & VSEPR Theory', subject: 'Chemistry', duration: '48:10', teacher: 'Prof. S. Sharma', views: '980', chapter: 'Chemical Bonding' }
+    ];
+  } else if (isClass11 && isNEET) {
+    return [
+      { id: 'v1', title: '1D Kinematics: Equations of Motion & Graphs', subject: 'Physics', duration: '42:15', teacher: 'Dr. R. K. Sen', views: '2.5k', chapter: 'Kinematics' },
+      { id: 'v2', title: 'Mole Concept & Stoichiometry Principles', subject: 'Chemistry', duration: '55:30', teacher: 'Prof. S. Sharma', views: '1.8k', chapter: 'Mole Concept' },
+      { id: 'v3', title: 'Cell Biology: Structure, Function & Organelles', subject: 'Biology', duration: '1:15:20', teacher: 'Dr. Ramesh Nair', views: '3.3k', chapter: 'Cell Biology' },
+      { id: 'v4', title: 'Newton\'s Laws of Motion & Friction Forces', subject: 'Physics', duration: '38:40', teacher: 'Dr. R. K. Sen', views: '1.2k', chapter: 'Laws of Motion' },
+      { id: 'v5', title: 'Animal Kingdom: Classification & Core Phyla', subject: 'Biology', duration: '1:08:45', teacher: 'Dr. Ramesh Nair', views: '2.9k', chapter: 'Animal Kingdom' }
+    ];
+  } else if (isClass12 && isJEE) {
+    return [
+      { id: 'v1', title: 'Electrostatics & Coulomb\'s Law Basics', subject: 'Physics', duration: '42:15', teacher: 'Dr. R. K. Sen', views: '2.5k', chapter: 'Electrostatics' },
+      { id: 'v2', title: 'Chemical Kinetics & Rate Equations', subject: 'Chemistry', duration: '55:30', teacher: 'Prof. S. Sharma', views: '1.8k', chapter: 'Chemical Kinetics' },
+      { id: 'v3', title: 'Definite Integrals and Area Under Curve', subject: 'Mathematics', duration: '1:12:00', teacher: 'Dr. Anita Roy', views: '3.1k', chapter: 'Definite Integrals' },
+      { id: 'v4', title: 'Gauss Law and Electric Flux Applications', subject: 'Physics', duration: '38:40', teacher: 'Dr. R. K. Sen', views: '1.2k', chapter: 'Gauss Law' },
+      { id: 'v5', title: 'Kinetics: Catalysts & Arrhenius Equation', subject: 'Chemistry', duration: '48:10', teacher: 'Prof. S. Sharma', views: '980', chapter: 'Chemical Kinetics' }
+    ];
+  } else if (isClass12 && isNEET) {
+    return [
+      { id: 'v1', title: 'Electrostatics & Coulomb\'s Law Basics', subject: 'Physics', duration: '42:15', teacher: 'Dr. R. K. Sen', views: '2.5k', chapter: 'Electrostatics' },
+      { id: 'v2', title: 'Chemical Kinetics & Rate Equations', subject: 'Chemistry', duration: '55:30', teacher: 'Prof. S. Sharma', views: '1.8k', chapter: 'Chemical Kinetics' },
+      { id: 'v3', title: 'Genetics: Molecular Basis of Inheritance', subject: 'Biology', duration: '1:20:00', teacher: 'Dr. Ramesh Nair', views: '4.1k', chapter: 'Genetics' },
+      { id: 'v4', title: 'Gauss Law and Electric Flux Applications', subject: 'Physics', duration: '38:40', teacher: 'Dr. R. K. Sen', views: '1.2k', chapter: 'Gauss Law' },
+      { id: 'v5', title: 'Biotechnology: Principles and DNA Recombination', subject: 'Biology', duration: '1:14:10', teacher: 'Dr. Ramesh Nair', views: '3.5k', chapter: 'Biotechnology' }
+    ];
+  } else {
+    // Foundation / Board level
+    return [
+      { id: 'v1', title: 'Light: Reflection & Spherical Mirrors', subject: 'Science (Physics)', duration: '35:00', teacher: 'Dr. R. K. Sen', views: '1.8k', chapter: 'Light & Optics' },
+      { id: 'v2', title: 'Chemical Reactions and Equations', subject: 'Science (Chemistry)', duration: '40:20', teacher: 'Prof. S. Sharma', views: '1.5k', chapter: 'Chemical Reactions' },
+      { id: 'v3', title: 'Quadratic Equations & Roots Methods', subject: 'Mathematics', duration: '48:00', teacher: 'Dr. Anita Roy', views: '2.2k', chapter: 'Quadratic Equations' },
+      { id: 'v4', title: 'Electricity: Ohm\'s Law and Resistivity', subject: 'Science (Physics)', duration: '38:15', teacher: 'Dr. R. K. Sen', views: '1.6k', chapter: 'Electricity' },
+      { id: 'v5', title: 'Life Processes: Nutrition and Respiration', subject: 'Science (Biology)', duration: '45:00', teacher: 'Dr. Ramesh Nair', views: '2.0k', chapter: 'Life Processes' }
+    ];
+  }
+}
+
+function getDynamicFallbackNotes(studentData) {
+  const className = String(studentData?.className || 'Class 11');
+  const examType = String(studentData?.examType || 'JEE');
+  
+  const isClass11 = className.includes('11');
+  const isClass12 = className.includes('12');
+  const isNEET = examType.toUpperCase() === 'NEET' || examType.toLowerCase().includes('medical') || examType.toLowerCase().includes('biology') || examType.toLowerCase().includes('neet');
+  const isJEE = examType.toUpperCase() === 'JEE' || examType.toLowerCase().includes('engineering') || examType.toLowerCase().includes('jee');
+
+  if (isClass11 && isJEE) {
+    return [
+      { id: 'n1', title: 'Kinematics Equations & Motion Formula Sheet', subject: 'Physics', size: '2.1 MB', format: 'PDF', downloads: '1.1k', chapter: 'Kinematics' },
+      { id: 'n2', title: 'Stoichiometry & Mole Concept Review Notes', subject: 'Chemistry', size: '3.4 MB', format: 'PDF', downloads: '2.0k', chapter: 'Mole Concept' },
+      { id: 'n3', title: 'Trigonometry Formulas & Identities Guide', subject: 'Mathematics', size: '1.3 MB', format: 'PDF', downloads: '2.8k', chapter: 'Trigonometry' },
+      { id: 'n4', title: 'Friction and Laws of Motion Study Notes', subject: 'Physics', size: '2.5 MB', format: 'PDF', downloads: '950', chapter: 'Laws of Motion' }
+    ];
+  } else if (isClass11 && isNEET) {
+    return [
+      { id: 'n1', title: 'Kinematics Equations & Motion Formula Sheet', subject: 'Physics', size: '2.1 MB', format: 'PDF', downloads: '1.1k', chapter: 'Kinematics' },
+      { id: 'n2', title: 'Stoichiometry & Mole Concept Review Notes', subject: 'Chemistry', size: '3.4 MB', format: 'PDF', downloads: '2.0k', chapter: 'Mole Concept' },
+      { id: 'n3', title: 'Cell Structure & Organelles Revision PDF', subject: 'Biology', size: '4.2 MB', format: 'PDF', downloads: '3.1k', chapter: 'Cell Biology' },
+      { id: 'n4', title: 'Taxonomic Categories & Animal Phyla Flowcharts', subject: 'Biology', size: '2.8 MB', format: 'PDF', downloads: '2.5k', chapter: 'Animal Kingdom' }
+    ];
+  } else if (isClass12 && isJEE) {
+    return [
+      { id: 'n1', title: 'Electrostatics Formulas & Key Concepts', subject: 'Physics', size: '2.4 MB', format: 'PDF', downloads: '1.2k', chapter: 'Electrostatics' },
+      { id: 'n2', title: 'Organic Chemistry: Reagent Flowcharts', subject: 'Chemistry', size: '4.8 MB', format: 'PDF', downloads: '2.5k', chapter: 'Organic Chemistry' },
+      { id: 'n3', title: 'Integral Calculus Cheat Sheet', subject: 'Mathematics', size: '1.1 MB', format: 'PDF', downloads: '3.0k', chapter: 'Definite Integrals' },
+      { id: 'n4', title: 'Modern English Literature Summary Notes', subject: 'English', size: '850 KB', format: 'PDF', downloads: '500', chapter: 'English Literature' }
+    ];
+  } else if (isClass12 && isNEET) {
+    return [
+      { id: 'n1', title: 'Electrostatics Formulas & Key Concepts', subject: 'Physics', size: '2.4 MB', format: 'PDF', downloads: '1.2k', chapter: 'Electrostatics' },
+      { id: 'n2', title: 'Organic Chemistry: Reagent Flowcharts', subject: 'Chemistry', size: '4.8 MB', format: 'PDF', downloads: '2.5k', chapter: 'Organic Chemistry' },
+      { id: 'n3', title: 'Molecular Basis of Inheritance Study Guide', subject: 'Biology', size: '5.1 MB', format: 'PDF', downloads: '3.9k', chapter: 'Genetics' },
+      { id: 'n4', title: 'Biotechnology Tools & DNA Processes Notes', subject: 'Biology', size: '3.2 MB', format: 'PDF', downloads: '2.7k', chapter: 'Biotechnology' }
+    ];
+  } else {
+    // Foundation / Board level
+    return [
+      { id: 'n1', title: 'Light Reflection & Refraction Concept Sheet', subject: 'Science (Physics)', size: '1.2 MB', format: 'PDF', downloads: '850', chapter: 'Light & Optics' },
+      { id: 'n2', title: 'Chemical Reactions and Equations Summary', subject: 'Science (Chemistry)', size: '1.5 MB', format: 'PDF', downloads: '920', chapter: 'Chemical Reactions' },
+      { id: 'n3', title: 'Quadratic Equations Formula Sheet & Rules', subject: 'Mathematics', size: '1.1 MB', format: 'PDF', downloads: '1.0k', chapter: 'Quadratic Equations' },
+      { id: 'n4', title: 'Life Processes Nutrition Diagrams & Summary', subject: 'Science (Biology)', size: '2.4 MB', format: 'PDF', downloads: '1.4k', chapter: 'Life Processes' }
+    ];
+  }
+}
+
+function getDynamicFallbackDpps(studentData) {
+  const className = String(studentData?.className || 'Class 11');
+  const examType = String(studentData?.examType || 'JEE');
+  
+  const isClass11 = className.includes('11');
+  const isClass12 = className.includes('12');
+  const isNEET = examType.toUpperCase() === 'NEET' || examType.toLowerCase().includes('medical') || examType.toLowerCase().includes('biology') || examType.toLowerCase().includes('neet');
+  const isJEE = examType.toUpperCase() === 'JEE' || examType.toLowerCase().includes('engineering') || examType.toLowerCase().includes('jee');
+
+  if (isClass11 && isJEE) {
+    return [
+      { id: 'q1', title: 'DPP-01: Vector Arithmetic & Resolution', subject: 'Physics', questions: 10, status: 'Attempted', score: '8/10', chapter: 'Kinematics' },
+      { id: 'q2', title: 'DPP-02: Stoichiometric Calculation Problems', subject: 'Chemistry', questions: 12, status: 'Pending', score: null, chapter: 'Mole Concept' },
+      { id: 'q3', title: 'DPP-03: Trigonometric Equations & Solutions', subject: 'Mathematics', questions: 15, status: 'Attempted', score: '12/15', chapter: 'Trigonometry' },
+      { id: 'q4', title: 'DPP-04: Newton\'s Laws & Tension Problems', subject: 'Physics', questions: 10, status: 'Pending', score: null, chapter: 'Laws of Motion' }
+    ];
+  } else if (isClass11 && isNEET) {
+    return [
+      { id: 'q1', title: 'DPP-01: Vector Arithmetic & Resolution', subject: 'Physics', questions: 10, status: 'Attempted', score: '8/10', chapter: 'Kinematics' },
+      { id: 'q2', title: 'DPP-02: Stoichiometric Calculation Problems', subject: 'Chemistry', questions: 12, status: 'Pending', score: null, chapter: 'Mole Concept' },
+      { id: 'q3', title: 'DPP-03: Cell Theory & Membrane Transport Quiz', subject: 'Biology', questions: 15, status: 'Attempted', score: '13/15', chapter: 'Cell Biology' },
+      { id: 'q4', title: 'DPP-04: Animal Kingdom Classification practice', subject: 'Biology', questions: 10, status: 'Pending', score: null, chapter: 'Animal Kingdom' }
+    ];
+  } else if (isClass12 && isJEE) {
+    return [
+      { id: 'q1', title: 'DPP-14: Electric Fields & Force Calculations', subject: 'Physics', questions: 10, status: 'Attempted', score: '9/10', chapter: 'Electrostatics' },
+      { id: 'q2', title: 'DPP-15: Rate Equations & Half-Life Problems', subject: 'Chemistry', questions: 12, status: 'Pending', score: null, chapter: 'Chemical Kinetics' },
+      { id: 'q3', title: 'DPP-16: Integration by Parts & Substitution', subject: 'Mathematics', questions: 15, status: 'Attempted', score: '12/15', chapter: 'Definite Integrals' },
+      { id: 'q4', title: 'DPP-17: Area under Parabola & Circles', subject: 'Mathematics', questions: 10, status: 'Pending', score: null, chapter: 'Definite Integrals' }
+    ];
+  } else if (isClass12 && isNEET) {
+    return [
+      { id: 'q1', title: 'DPP-14: Electric Fields & Force Calculations', subject: 'Physics', questions: 10, status: 'Attempted', score: '9/10', chapter: 'Electrostatics' },
+      { id: 'q2', title: 'DPP-15: Rate Equations & Half-Life Problems', subject: 'Chemistry', questions: 12, status: 'Pending', score: null, chapter: 'Chemical Kinetics' },
+      { id: 'q3', title: 'DPP-16: Monohybrid & Dihybrid Cross Patterns', subject: 'Biology', questions: 15, status: 'Attempted', score: '14/15', chapter: 'Genetics' },
+      { id: 'q4', title: 'DPP-17: DNA Replication & Transcription Steps', subject: 'Biology', questions: 10, status: 'Pending', score: null, chapter: 'Genetics' }
+    ];
+  } else {
+    // Foundation / Board level
+    return [
+      { id: 'q1', title: 'DPP-01: Light Reflection & Spherical Mirrors', subject: 'Science (Physics)', questions: 10, status: 'Attempted', score: '9/10', chapter: 'Light & Optics' },
+      { id: 'q2', title: 'DPP-02: Balancing Chemical Equations Quiz', subject: 'Science (Chemistry)', questions: 10, status: 'Pending', score: null, chapter: 'Chemical Reactions' },
+      { id: 'q3', title: 'DPP-03: Quadratic Equations Roots & Methods', subject: 'Mathematics', questions: 12, status: 'Attempted', score: '11/12', chapter: 'Quadratic Equations' },
+      { id: 'q4', title: 'DPP-04: Life Processes Nutrition & Energy quiz', subject: 'Science (Biology)', questions: 10, status: 'Pending', score: null, chapter: 'Life Processes' }
+    ];
+  }
+}
+
+function getDppQuestions(dpp) {
+  const subject = String(dpp?.subject || '').toLowerCase();
+  const title = String(dpp?.title || '').toLowerCase();
+  
+  const isPhysics = subject.includes('phys') || title.includes('phys') || title.includes('electric') || title.includes('force') || title.includes('vector') || title.includes('kinematics');
+  const isChemistry = subject.includes('chem') || title.includes('chem') || title.includes('rate') || title.includes('kinetics') || title.includes('mole') || title.includes('bonding');
+  const isBiology = subject.includes('bio') || subject.includes('botany') || subject.includes('zoology') || title.includes('bio') || title.includes('cell') || title.includes('plant') || title.includes('genetics') || title.includes('dna') || title.includes('animal') || title.includes('cross') || title.includes('replication') || title.includes('nutrition') || title.includes('life');
+  const isMath = subject.includes('math') || title.includes('math') || title.includes('integral') || title.includes('calculus') || title.includes('trig') || title.includes('equation') || title.includes('parabola') || title.includes('circle');
+
+  if (isPhysics) {
+    return [
+      {
+        q: "1. If a particle has constant positive acceleration, what is the shape of its position-time graph?",
+        opt: ["A) Straight diagonal line", "B) Parabola opening upwards", "C) Parabola opening downwards", "D) Sinusoidal curve"],
+        ans: 1
+      },
+      {
+        q: "2. Which of the following defines electric flux through a surface?",
+        opt: ["A) ∫ E • dA", "B) ∫ E x dA", "C) E / q", "D) q / E"],
+        ans: 0
+      },
+      {
+        q: "3. What is the SI unit of electric potential difference?",
+        opt: ["A) Ampere (A)", "B) Volt (V)", "C) Ohm (Ω)", "D) Coulomb (C)"],
+        ans: 1
+      }
+    ];
+  } else if (isChemistry) {
+    return [
+      {
+        q: "1. What is the molar mass of pure water (H₂O)?",
+        opt: ["A) 16.0 g/mol", "B) 18.0 g/mol", "C) 20.0 g/mol", "D) 22.4 g/mol"],
+        ans: 1
+      },
+      {
+        q: "2. According to Arrhenius equation, the rate constant (k) of a chemical reaction is directly proportional to:",
+        opt: ["A) e^(-Ea / RT)", "B) e^(Ea / RT)", "C) Ea * R * T", "D) Temperature (T) only"],
+        ans: 0
+      },
+      {
+        q: "3. Which type of bond is formed by the sharing of an electron pair between two atoms?",
+        opt: ["A) Ionic bond", "B) Covalent bond", "C) Metallic bond", "D) Hydrogen bond"],
+        ans: 1
+      }
+    ];
+  } else if (isBiology) {
+    return [
+      {
+        q: "1. Which organelle is known as the powerhouse of the eukaryotic cell?",
+        opt: ["A) Golgi apparatus", "B) Mitochondria", "C) Endoplasmic reticulum", "D) Lysosome"],
+        ans: 1
+      },
+      {
+        q: "2. In double-stranded DNA, which nucleotide base pairs with Adenine via two hydrogen bonds?",
+        opt: ["A) Cytosine", "B) Guanine", "C) Thymine", "D) Uracil"],
+        ans: 2
+      },
+      {
+        q: "3. Which hormone, produced by beta cells of the pancreas, regulates glucose level in blood?",
+        opt: ["A) Glucagon", "B) Insulin", "C) Adrenaline", "D) Thyroxine"],
+        ans: 1
+      }
+    ];
+  } else if (isMath) {
+    return [
+      {
+        q: "1. What is the derivative of x^x with respect to x?",
+        opt: ["A) x * x^(x-1)", "B) x^x * (1 + ln x)", "C) x^x * ln x", "D) e^x"],
+        ans: 1
+      },
+      {
+        q: "2. What is the indefinite integral of 1/x dx (for x > 0)?",
+        opt: ["A) ln(x) + C", "B) -1/x² + C", "C) e^x + C", "D) x + C"],
+        ans: 0
+      },
+      {
+        q: "3. What is the value of sin(π/6)?",
+        opt: ["A) 0", "B) 1/2", "C) √3/2", "D) 1"],
+        ans: 1
+      }
+    ];
+  } else {
+    // General / English / Mixed
+    return [
+      {
+        q: "1. Identify the noun in the sentence: 'The curious cat leaped over the wooden fence.'",
+        opt: ["A) curious", "B) cat", "C) leaped", "D) wooden"],
+        ans: 1
+      },
+      {
+        q: "2. Which of the following is a synonym of 'Meticulous'?",
+        opt: ["A) Careless", "B) Precise", "C) Sloppy", "D) Slow"],
+        ans: 1
+      },
+      {
+        q: "3. Who wrote the classic English play 'Hamlet'?",
+        opt: ["A) Charles Dickens", "B) William Shakespeare", "C) George Orwell", "D) Mark Twain"],
+        ans: 1
+      }
+    ];
+  }
+}
+
+function getYouTubeEmbedUrl(url) {
+  if (!url) return null;
+  // If already an embed link
+  if (url.includes('youtube.com/embed/')) {
+    return url.includes('?') ? `${url}&autoplay=1` : `${url}?autoplay=1`;
+  }
+  // youtu.be/ID
+  const shortMatch = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+  if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}?autoplay=1`;
+  // youtube.com/watch?v=ID or m.youtube.com/watch?v=ID
+  const longMatch = url.match(/[?&]v=([a-zA-Z0-9_-]+)/);
+  if (longMatch) return `https://www.youtube.com/embed/${longMatch[1]}?autoplay=1`;
+  // youtube.com/shorts/ID
+  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/);
+  if (shortsMatch) return `https://www.youtube.com/embed/${shortsMatch[1]}?autoplay=1`;
+  return null;
+}
+
+const SafeWebView = ({ source, style, ...props }) => {
+  if (Platform.OS === 'web') {
+    const flatStyle = StyleSheet.flatten(style) || {};
+    return (
+      <iframe
+        src={source.uri}
+        style={{
+          width: flatStyle.width || '100%',
+          height: flatStyle.height || '100%',
+          borderWidth: 0,
+          borderRadius: flatStyle.borderRadius || 0,
+        }}
+        allow="autoplay; encrypted-media; fullscreen"
+        allowFullScreen
+      />
+    );
+  }
+  return <WebView source={source} style={style} {...props} />;
+};
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -40,22 +336,84 @@ export default function StudentDashboard() {
   // Student Profile Data States
   const [studentData, setStudentData] = useState({
     name: 'fsv',
+    fullName: 'Ayush Marjee',
     enrollment: 'PATH26002135',
     className: 'Class 11',
     attendance: '—',
     gpa: '—',
     streak: '2 days',
     nextExam: 'STUDY PLANNER FOR CLASS 11',
+    email: 'ayushmarjee@gmail.com',
+    mobile: '+91 98765 43210',
+    board: 'CBSE Board',
+    rank: 'Elite Rank',
+    examType: 'JEE',
+    guardianName: 'Rajesh Marjee',
+    guardianRelation: 'Father',
+    guardianMobile: '+91 99887 76655',
+    guardianEmail: 'rajesh.marjee@gmail.com',
   });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [apiNotices, setApiNotices] = useState([]);
+  const [apiFiles, setApiFiles] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     fetchStudentProfile();
+    fetchNotices();
+    fetchMaterials();
   }, []);
 
+  const fetchMaterials = async () => {
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://api.studypathportal.in';
+    try {
+      const token = await storage.getItem('userToken');
+      const response = await fetch(`${API_BASE}/api/master-data/library/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setApiFiles(data); // Store raw library items
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching materials/files:', err);
+    }
+  };
+
+
+  const fetchNotices = async () => {
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://api.studypathportal.in';
+    try {
+      const token = await storage.getItem('userToken');
+      const response = await fetch(`${API_BASE}/api/notices/`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setApiNotices(data);
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching notices:', err);
+    }
+  };
+
   const fetchStudentProfile = async () => {
+    const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'https://api.studypathportal.in';
     setLoading(true);
     try {
       const token = await storage.getItem('userToken');
@@ -67,11 +425,13 @@ export default function StudentDashboard() {
         const localName = parsed.first_name || parsed.name || parsed.email?.split('@')[0] || 'fsv';
         const localEnrollment = parsed.admission_number || parsed.admission_id || 'PATH26002135';
         const localClass = parsed.class_level ? `Class ${parsed.class_level}` : (parsed.course || 'Class 11');
+        const localEmail = parsed.email || 'ayushmarjee@gmail.com';
         setStudentData(prev => ({
           ...prev,
           name: localName,
           enrollment: localEnrollment,
           className: localClass,
+          email: localEmail,
         }));
       }
 
@@ -79,9 +439,16 @@ export default function StudentDashboard() {
       let freshName = null;
       let freshEnrollment = null;
       let freshClass = null;
+      let freshEmail = null;
+      let freshMobile = null;
+      let freshBoard = null;
+      let freshExamType = null;
+      let freshGuardianName = null;
+      let freshGuardianEmail = null;
+      let freshGuardianMobile = null;
 
       try {
-        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/profile/`, {
+        const response = await fetch(`${API_BASE}/api/profile/`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -96,6 +463,7 @@ export default function StudentDashboard() {
           
           freshName = `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || profileData.username;
           freshEnrollment = profileData.admission_number;
+          freshEmail = profileData.email;
           if (profileData.class_level) {
             freshClass = `Class ${profileData.class_level}`;
           }
@@ -106,7 +474,7 @@ export default function StudentDashboard() {
 
       // Also fetch from /api/student/erp-data/ to get exact class name and student details
       try {
-        const erpResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/student/erp-data/`, {
+        const erpResponse = await fetch(`${API_BASE}/api/student/erp-data/`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -116,14 +484,35 @@ export default function StudentDashboard() {
 
         if (erpResponse.ok) {
           const erpData = await erpResponse.json();
-          if (erpData.student?.studentsDetails?.[0]?.studentName) {
-            freshName = erpData.student.studentsDetails[0].studentName;
+          const detail = erpData.student?.studentsDetails?.[0];
+          if (detail) {
+            if (detail.studentName) {
+              freshName = detail.studentName;
+            }
+            if (detail.studentEmail) {
+              freshEmail = detail.studentEmail;
+            }
+            if (detail.mobileNum && detail.mobileNum !== '0000000000') {
+              freshMobile = detail.mobileNum;
+            }
+            if (detail.board) {
+              freshBoard = detail.board;
+            }
           }
           if (erpData.admissionNumber) {
             freshEnrollment = erpData.admissionNumber;
           }
           if (erpData.class?.name) {
             freshClass = `Class ${erpData.class.name}`;
+          }
+          if (erpData.examTag?.name) {
+            freshExamType = erpData.examTag.name;
+          }
+          const guardian = erpData.student?.guardians?.[0];
+          if (guardian) {
+            if (guardian.guardianName) freshGuardianName = guardian.guardianName;
+            if (guardian.guardianEmail) freshGuardianEmail = guardian.guardianEmail;
+            if (guardian.guardianMobile) freshGuardianMobile = guardian.guardianMobile;
           }
         }
       } catch (err) {
@@ -132,7 +521,7 @@ export default function StudentDashboard() {
 
       // Optionally fetch attendance to calculate rate
       try {
-        const attendanceResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/student/attendance/`, {
+        const attendanceResponse = await fetch(`${API_BASE}/api/student/attendance/`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -155,14 +544,20 @@ export default function StudentDashboard() {
         console.warn('Error fetching attendance:', err);
       }
 
-      if (freshName || freshEnrollment || freshClass) {
-        setStudentData(prev => ({
-          ...prev,
-          name: freshName || prev.name,
-          enrollment: freshEnrollment || prev.enrollment,
-          className: freshClass || prev.className,
-        }));
-      }
+      setStudentData(prev => ({
+        ...prev,
+        name: freshName || prev.name,
+        fullName: (freshName && freshName !== 'fsv') ? freshName : prev.fullName,
+        enrollment: freshEnrollment || prev.enrollment,
+        className: freshClass || prev.className,
+        email: freshEmail || prev.email,
+        mobile: freshMobile || prev.mobile,
+        board: freshBoard || prev.board,
+        examType: freshExamType || prev.examType,
+        guardianName: freshGuardianName || prev.guardianName,
+        guardianEmail: freshGuardianEmail || prev.guardianEmail,
+        guardianMobile: freshGuardianMobile || prev.guardianMobile,
+      }));
 
     } catch (err) {
       console.warn('Could not load profile from API, using local fallback:', err);
@@ -173,7 +568,11 @@ export default function StudentDashboard() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchStudentProfile();
+    await Promise.all([
+      fetchStudentProfile(),
+      fetchNotices(),
+      fetchMaterials()
+    ]);
     setRefreshing(false);
   };
 
@@ -189,23 +588,29 @@ export default function StudentDashboard() {
     }
   };
 
+  const handleLogoutConfirm = () => {
+    setShowLogoutConfirm(true);
+  };
+
   const toggleTheme = () => {
     setLocalTheme(currentScheme === 'dark' ? 'light' : 'dark');
   };
 
   // Custom colors matching the dark, premium blue slate theme of the screenshot
-  const customBg = isDarkMode ? '#090d16' : '#f8f9fa';
+  const customBg = isDarkMode ? '#090d16' : '#FAF8F5';
   const cardBg = isDarkMode ? '#101726' : '#ffffff';
-  const cardBorder = isDarkMode ? '#1e293b' : '#e5e7eb';
-  const textColor = isDarkMode ? '#ffffff' : '#4a2d1b';
-  const textMuted = isDarkMode ? '#8b9bb4' : '#6e7f8d';
+  const cardBorder = isDarkMode ? '#1e293b' : '#f0ece6';
+  const textColor = isDarkMode ? '#ffffff' : '#111827';
+  const textMuted = isDarkMode ? '#8b9bb4' : '#8e8e93';
 
   // Responsive Drawer and View State
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [studyMaterialsExpanded, setStudyMaterialsExpanded] = useState(true);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const drawerAnim = useRef(new Animated.Value(-280)).current;
+  const videoRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
   const isLargeScreen = windowWidth >= 992;
 
@@ -403,28 +808,78 @@ export default function StudentDashboard() {
   const [videoPlayState, setVideoPlayState] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0.4);
   const [materialsSearch, setMaterialsSearch] = useState('');
+  const [selectedPdf, setSelectedPdf] = useState(null);
+  const [pdfZoom, setPdfZoom] = useState(1.0);
+  const [pdfPage, setPdfPage] = useState(1);
   
-  const videoLectures = [
-    { id: 'v1', title: 'Introduction to Electrostatics & Coulombs Law', subject: 'Physics', duration: '42:15', teacher: 'Dr. R. K. Sen', views: '2.5k' },
-    { id: 'v2', title: 'Understanding Chemical Kinetics & Rate Laws', subject: 'Chemistry', duration: '55:30', teacher: 'Prof. S. Sharma', views: '1.8k' },
-    { id: 'v3', title: 'Definite Integrals and Area Under Curve', subject: 'Mathematics', duration: '1:12:00', teacher: 'Dr. Anita Roy', views: '3.1k' },
-    { id: 'v4', title: 'Gauss Law and Electric Flux Applications', subject: 'Physics', duration: '38:40', teacher: 'Dr. R. K. Sen', views: '1.2k' },
-    { id: 'v5', title: 'Kinetics: Catalysts & Arrhenius Equation', subject: 'Chemistry', duration: '48:10', teacher: 'Prof. S. Sharma', views: '980' }
-  ];
+  // Parse library data from /api/master-data/library/
+  // Each item has nested videos[], pdfs[], dpps[] with chapter_name & subject_name
+  const dynamicVideos = [];
+  const dynamicNotes = [];
+  const dynamicDpps = [];
 
-  const studyNotes = [
-    { id: 'n1', title: 'Electrostatics Formulas & Key Concepts', subject: 'Physics', size: '2.4 MB', format: 'PDF', downloads: '1.2k' },
-    { id: 'n2', title: 'Organic Chemistry: Reagent Flowcharts', subject: 'Chemistry', size: '4.8 MB', format: 'PDF', downloads: '2.5k' },
-    { id: 'n3', title: 'Integral Calculus Cheat Sheet', subject: 'Mathematics', size: '1.1 MB', format: 'PDF', downloads: '3.0k' },
-    { id: 'n4', title: 'Modern English Literature Summary Notes', subject: 'English', size: '850 KB', format: 'PDF', downloads: '500' }
-  ];
+  apiFiles.forEach((item) => {
+    const chapter = item.chapter_name || item.topic_name || 'General';
+    const subject = item.subject_name || 'General';
+    const examNames = item.target_exam_names || [];
 
-  const dppQuestions = [
-    { id: 'q1', title: 'DPP-14: Electric Fields & Force Calculations', subject: 'Physics', questions: 10, status: 'Attempted', score: '9/10' },
-    { id: 'q2', title: 'DPP-15: Rate Equations & Half-Life Problems', subject: 'Chemistry', questions: 12, status: 'Pending', score: null },
-    { id: 'q3', title: 'DPP-16: Integration by Parts & Substitution', subject: 'Mathematics', questions: 15, status: 'Attempted', score: '12/15' },
-    { id: 'q4', title: 'DPP-17: Area under Parabola & Circles', subject: 'Mathematics', questions: 10, status: 'Pending', score: null }
-  ];
+    // Filter by student's exam type (e.g. JEE, NEET)
+    const studentExam = String(studentData.examType || '').toUpperCase();
+    const examMatches = examNames.length === 0 || examNames.some(e => e.toUpperCase() === studentExam) || studentExam === '';
+
+    if (!examMatches) return; // Skip content not relevant to this student's exam
+
+    // --- Videos ---
+    (item.videos || []).forEach((v) => {
+      const videoUrl = v.video_link || v.video_file || '';
+      dynamicVideos.push({
+        id: `v-${v.id}`,
+        title: v.title || 'Untitled Video',
+        subject,
+        chapter,
+        duration: v.duration || '—',
+        teacher: v.teacher || v.instructor || 'Instructor',
+        views: v.views || '—',
+        url: videoUrl,
+        thumbnail: v.thumbnail || null,
+      });
+    });
+
+    // --- PDFs / Study Materials ---
+    (item.pdfs || []).forEach((p) => {
+      dynamicNotes.push({
+        id: `p-${p.id}`,
+        title: p.title || 'Untitled PDF',
+        subject,
+        chapter,
+        size: '—',
+        format: 'PDF',
+        downloads: '—',
+        url: p.file || '',
+        thumbnail: p.thumbnail || null,
+      });
+    });
+
+    // --- DPPs ---
+    (item.dpps || []).forEach((d) => {
+      dynamicDpps.push({
+        id: `d-${d.id}`,
+        title: d.title || 'Untitled DPP',
+        subject,
+        chapter,
+        questions: d.questions_count || 10,
+        status: d.status || 'Pending',
+        score: d.score || null,
+        url: d.file || d.dpp_file || '',
+      });
+    });
+  });
+
+  const videoLectures = dynamicVideos.length > 0 ? dynamicVideos : getDynamicFallbackVideos(studentData);
+
+  const studyNotes = dynamicNotes.length > 0 ? dynamicNotes : getDynamicFallbackNotes(studentData);
+
+  const dppQuestions = dynamicDpps.length > 0 ? dynamicDpps : getDynamicFallbackDpps(studentData);
 
   const [activeDppAttempt, setActiveDppAttempt] = useState(null);
   const [dppAnswers, setDppAnswers] = useState({});
@@ -540,179 +995,161 @@ export default function StudentDashboard() {
 
   // --- SUBVIEW RENDERS ---
   const renderDashboardView = () => {
+    const dispName = studentData.name || 'fsv';
+    const dispEnrollment = studentData.enrollment || 'PATH26002135';
+    const dispClass = studentData.className || 'Class 11';
+    const dispAttendance = studentData.attendance === '—' ? '92' : studentData.attendance;
+    const dispGpa = studentData.gpa === '—' ? '8.4/10' : (studentData.gpa.includes('/10') ? studentData.gpa : `${studentData.gpa}/10`);
+    const dispStreak = studentData.streak || '2 days';
+
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <View style={styles.heroLeft}>
-            <ThemedText style={styles.hubLabel}>STUDENT INTELLIGENCE HUB</ThemedText>
-            <ThemedText style={[styles.welcomeText, { color: isDarkMode ? '#ffffff' : '#4a2d1b' }]}>
-              Welcome Back, <ThemedText style={styles.orangeText}>{studentData.name}</ThemedText>!
+        {/* Welcome Back Card */}
+        <LinearGradient
+          colors={['#101726', '#1E1420']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.welcomeBannerCard}
+        >
+          <View style={styles.welcomeBannerHeader}>
+            <ThemedText style={styles.welcomeBannerLabel}>STUDENT INTELLIGENCE HUB</ThemedText>
+            <ThemedText style={styles.welcomeBannerHeading}>
+              Welcome Back, <ThemedText style={styles.orangeText}>{dispName}</ThemedText>!
             </ThemedText>
-            <ThemedText style={[styles.heroDesc, { color: textMuted }]}>
-              Your comprehensive learning snapshot is ready. We've analyzed your progress and prepared{' '}
-              <ThemedText style={styles.insightsLink}>AI-powered insights</ThemedText> for your goals today.
+            <ThemedText style={styles.welcomeBannerDesc}>
+              Your comprehensive learning snapshot is ready. We've analyzed your progress and prepared AI-powered insights for your goals today.
             </ThemedText>
-
-            <View style={styles.actionsRow}>
-              <Pressable
-                onPress={handleRefresh}
-                style={[styles.refreshBtn, { borderColor: isDarkMode ? '#ff7e40' : '#e5e7eb' }]}
-              >
-                {refreshing ? (
-                  <ActivityIndicator size="small" color="#ff7e40" style={{ marginRight: 6 }} />
-                ) : (
-                  <FontAwesome name="refresh" size={12} color="#ff7e40" style={{ marginRight: 6 }} />
-                )}
-                <ThemedText style={styles.refreshBtnText}>FORCE ERP REFRESH</ThemedText>
-              </Pressable>
-
-              <View style={styles.syncIndicator}>
-                <Ionicons name="time-outline" size={12} color={textMuted} style={{ marginRight: 4 }} />
-                <ThemedText style={[styles.syncText, { color: textMuted }]}>LAST SYNC: JUST NOW</ThemedText>
-              </View>
-            </View>
           </View>
 
-          {/* Student Profile Card */}
-          <View style={[styles.profileCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.avatar}>
-              <ThemedText style={styles.avatarLetter}>
-                {studentData.name.charAt(0).toLowerCase()}
-              </ThemedText>
-              <View style={styles.activeIndicator} />
-            </View>
-            <View style={styles.profileDetails}>
-              <ThemedText style={[styles.profileName, { color: textColor }]}>{studentData.name}</ThemedText>
-              <ThemedText style={styles.enrollmentLabel}>
-                ENROLLMENT - <ThemedText style={styles.enrollmentVal}>{studentData.enrollment}</ThemedText>
-              </ThemedText>
-              <View style={styles.classBadge}>
-                <ThemedText style={styles.classBadgeText}>{studentData.className.toUpperCase()}</ThemedText>
-              </View>
+          <Pressable
+            onPress={handleRefresh}
+            style={styles.welcomeBannerRefreshBtn}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 6 }} />
+            ) : (
+              <Ionicons name="refresh" size={14} color="#ffffff" style={{ marginRight: 6 }} />
+            )}
+            <ThemedText style={styles.welcomeBannerRefreshBtnText}>Force ERP Refresh</ThemedText>
+          </Pressable>
+        </LinearGradient>
+
+        {/* Student Profile Card */}
+        <View style={[styles.studentCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={styles.studentCardAvatar}>
+            <ThemedText style={styles.studentCardAvatarText}>
+              {dispName.charAt(0).toUpperCase()}
+            </ThemedText>
+          </View>
+          <View style={styles.studentCardDetails}>
+            <ThemedText style={[styles.studentCardName, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+              {dispName}
+            </ThemedText>
+            <ThemedText style={styles.studentCardEnrollment}>
+              ENROLLMENT · <ThemedText style={styles.studentCardEnrollmentValue}>{dispEnrollment}</ThemedText>
+            </ThemedText>
+            <View style={styles.studentCardClassBadge}>
+              <ThemedText style={styles.studentCardClassBadgeText}>{dispClass}</ThemedText>
             </View>
           </View>
         </View>
 
-        {/* Stats 4-Card Grid */}
+        {/* Stats 2x2 Grid */}
         <View style={styles.statsGrid}>
           {/* Card 1: Attendance Rate */}
           <View style={[styles.statsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.cardHeader}>
-              <ThemedText style={styles.cardLabel}>ATTENDANCE RATE</ThemedText>
-              <Ionicons name="analytics" size={14} color="#3b82f6" />
+            <View style={styles.statsCardContent}>
+              <ThemedText style={styles.statsCardLabel}>ATTENDANCE RATE</ThemedText>
+              <ThemedText style={[styles.statsCardValue, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+                {dispAttendance}%
+              </ThemedText>
+              <ThemedText style={styles.statsCardSubtext}>+1.2% vs last month</ThemedText>
             </View>
-            <ThemedText style={[styles.cardValue, { color: textColor }]}>
-              {studentData.attendance}{studentData.attendance !== '—' ? '%' : ''}
-            </ThemedText>
-            <ThemedText style={styles.cardStatusMuted}>Syncing attendance...</ThemedText>
-            <View style={styles.progressBarWrapper}>
-              <View style={[styles.progressBar, { width: '85%', backgroundColor: '#3b82f6' }]} />
-            </View>
-            <View style={styles.greenBadge}>
-              <ThemedText style={styles.greenBadgeText}>+1.2% vs last month</ThemedText>
+            <View style={[styles.statsCardIconContainer, { backgroundColor: isDarkMode ? '#1e293b' : '#eff6ff' }]}>
+              <Ionicons name="pulse" size={18} color="#3b82f6" />
             </View>
           </View>
 
           {/* Card 2: Current GPA */}
           <View style={[styles.statsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.cardHeader}>
-              <ThemedText style={styles.cardLabel}>CURRENT GPA</ThemedText>
-              <Ionicons name="ribbon" size={14} color="#10b981" />
+            <View style={styles.statsCardContent}>
+              <ThemedText style={styles.statsCardLabel}>CURRENT GPA</ThemedText>
+              <ThemedText style={[styles.statsCardValue, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+                {dispGpa}
+              </ThemedText>
+              <ThemedText style={styles.statsCardSubtext}>Rank #1</ThemedText>
             </View>
-            <ThemedText style={[styles.cardValue, { color: textColor }]}>
-              {studentData.gpa}{studentData.gpa !== '—' ? '/10' : '/10'}
-            </ThemedText>
-            <ThemedText style={styles.cardStatusMuted}>Syncing GPA...</ThemedText>
-            <View style={styles.progressBarWrapper}>
-              <View style={[styles.progressBar, { width: '88%', backgroundColor: '#10b981' }]} />
-            </View>
-            <View style={styles.grayBadge}>
-              <ThemedText style={styles.grayBadgeText}>Rank: 12th</ThemedText>
+            <View style={[styles.statsCardIconContainer, { backgroundColor: isDarkMode ? '#1e293b' : '#f0fdf4' }]}>
+              <Ionicons name="school" size={18} color="#10b981" />
             </View>
           </View>
 
           {/* Card 3: Next Exam */}
           <View style={[styles.statsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.cardHeader}>
-              <ThemedText style={styles.cardLabel}>NEXT EXAM</ThemedText>
-              <Ionicons name="calendar" size={14} color="#ff7e40" />
+            <View style={styles.statsCardContent}>
+              <ThemedText style={styles.statsCardLabel}>NEXT EXAM</ThemedText>
+              <ThemedText style={[styles.statsCardValue, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+                {dispClass}
+              </ThemedText>
+              <ThemedText style={styles.statsCardSubtext}>Active Now · 180 min</ThemedText>
             </View>
-            <ThemedText style={[styles.examTitle, { color: textColor }]} numberOfLines={2}>
-              {studentData.nextExam}
-            </ThemedText>
-            <ThemedText style={styles.examSpecs}>Active Now | 180 MIN</ThemedText>
-            <View style={styles.ongoingBadge}>
-              <ThemedText style={styles.ongoingBadgeText}>Ongoing</ThemedText>
+            <View style={[styles.statsCardIconContainer, { backgroundColor: isDarkMode ? '#1e293b' : '#fff7ed' }]}>
+              <Ionicons name="calendar" size={18} color="#f97316" />
             </View>
           </View>
 
           {/* Card 4: Study Streak */}
           <View style={[styles.statsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.cardHeader}>
-              <ThemedText style={styles.cardLabel}>STUDY STREAK</ThemedText>
-              <Ionicons name="flame" size={14} color="#ec4899" />
-            </View>
-            <ThemedText style={[styles.cardValue, { color: textColor }]}>{studentData.streak}</ThemedText>
-            <ThemedText style={styles.streakSub}>Consistent learning!</ThemedText>
-            <View style={styles.streakBadge}>
-              <ThemedText style={styles.streakBadgeText}>Daily Engagement</ThemedText>
-            </View>
-          </View>
-        </View>
-
-        {/* Analytics Section (Strong Subject & Needs Focus) */}
-        <View style={styles.analyticsSection}>
-          {/* Card 1: Strong Subject */}
-          <View style={[styles.analyticsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.analyticsContent}>
-              <ThemedText style={styles.analyticsLabel}>STRONG SUBJECT</ThemedText>
-              <ThemedText style={styles.strongValue}>CHEMISTRY</ThemedText>
-              <ThemedText style={styles.analyticsDesc}>High mastery in Organic reactions</ThemedText>
-              <View style={styles.analysisBadge}>
-                <ThemedText style={styles.analysisBadgeText}>92% Mastery Level</ThemedText>
-              </View>
-            </View>
-            <Ionicons name="flash-outline" size={54} color="rgba(16, 185, 129, 0.08)" style={styles.watermarkIcon} />
-          </View>
-
-          {/* Card 2: Needs Focus */}
-          <View style={[styles.analyticsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.analyticsContent}>
-              <ThemedText style={styles.analyticsLabel}>NEEDS FOCUS</ThemedText>
-              <ThemedText style={styles.focusValue}>MATHEMATICS</ThemedText>
-              <ThemedText style={styles.analyticsDesc}>Integration concepts need revision</ThemedText>
-              <View style={styles.focusStatusBadge}>
-                <ThemedText style={styles.focusStatusText}>72% Mastery Level</ThemedText>
-              </View>
-            </View>
-            <Ionicons name="disc-outline" size={54} color="rgba(239, 68, 68, 0.08)" style={styles.watermarkIcon} />
-          </View>
-        </View>
-
-        {/* Performance Trend Chart Box */}
-        <View style={[styles.chartContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={styles.chartHeader}>
-            <ThemedText style={[styles.chartTitle, { color: textColor }]}>PERFORMANCE TREND (LAST 30 DAYS)</ThemedText>
-            <ThemedText style={styles.chartSub}>+12% MASTERY GROWTH</ThemedText>
-          </View>
-
-          <View style={styles.chartBox}>
-            <LinearGradient
-              colors={isDarkMode ? ['rgba(255,126,64,0.05)', 'rgba(255,126,64,0.15)'] : ['#fef3c7', '#fde68a']}
-              style={{ flex: 1, borderRadius: 8, padding: 12, justifyContent: 'center', alignItems: 'center' }}
-            >
-              <Ionicons name="trending-up" size={32} color="#ff7e40" style={{ marginBottom: 4 }} />
-              <ThemedText style={[styles.chartPlaceholderText, { color: isDarkMode ? '#ff7e40' : '#4a2d1b' }]}>
-                ACADEMIC PERFORMANCE CURVE ACTIVE
+            <View style={styles.statsCardContent}>
+              <ThemedText style={styles.statsCardLabel}>STUDY STREAK</ThemedText>
+              <ThemedText style={[styles.statsCardValue, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+                {dispStreak}
               </ThemedText>
-            </LinearGradient>
+              <ThemedText style={styles.statsCardSubtext}>Consistent learning!</ThemedText>
+            </View>
+            <View style={[styles.statsCardIconContainer, { backgroundColor: isDarkMode ? '#1e293b' : '#faf5ff' }]}>
+              <Ionicons name="flame" size={18} color="#8b5cf6" />
+            </View>
+          </View>
+        </View>
+
+        {/* AI Insights Section */}
+        <View style={styles.aiInsightsSection}>
+          <View style={{ gap: 4 }}>
+            <ThemedText style={styles.aiInsightsLabel}>POWERED BY AI</ThemedText>
+            <ThemedText style={[styles.aiInsightsTitle, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+              Insights for you
+            </ThemedText>
           </View>
 
-          <View style={styles.chartLabels}>
-            <ThemedText style={styles.chartLabelText}>PAST</ThemedText>
-            <ThemedText style={styles.chartLabelText}>RECENT</ThemedText>
-            <ThemedText style={styles.chartLabelText}>TODAY</ThemedText>
+          {/* Insight Card 1 */}
+          <View style={[styles.aiInsightCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={[styles.aiInsightIconContainer, { backgroundColor: isDarkMode ? '#2d1e1f' : '#fff5f2' }]}>
+              <Ionicons name="sparkles" size={16} color="#ff7e40" />
+            </View>
+            <ThemedText style={[styles.aiInsightText, { color: isDarkMode ? '#d1d5db' : '#374151' }]}>
+              Your Physics scores trended up 12% this week — keep the momentum.
+            </ThemedText>
+          </View>
+
+          {/* Insight Card 2 */}
+          <View style={[styles.aiInsightCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={[styles.aiInsightIconContainer, { backgroundColor: isDarkMode ? '#2d1e1f' : '#fff5f2' }]}>
+              <Ionicons name="sparkles" size={16} color="#ff7e40" />
+            </View>
+            <ThemedText style={[styles.aiInsightText, { color: isDarkMode ? '#d1d5db' : '#374151' }]}>
+              You study best between 6–8 PM. Schedule hard topics then.
+            </ThemedText>
+          </View>
+
+          {/* Insight Card 3 */}
+          <View style={[styles.aiInsightCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={[styles.aiInsightIconContainer, { backgroundColor: isDarkMode ? '#2d1e1f' : '#fff5f2' }]}>
+              <Ionicons name="sparkles" size={16} color="#ff7e40" />
+            </View>
+            <ThemedText style={[styles.aiInsightText, { color: isDarkMode ? '#d1d5db' : '#374151' }]}>
+              Revisit Organic Chemistry: 3 weak concepts detected.
+            </ThemedText>
           </View>
         </View>
       </ScrollView>
@@ -812,95 +1249,155 @@ export default function StudentDashboard() {
   };
 
   const renderProfileView = () => {
+    const avatarLetter = (studentData.name || 'F').charAt(0).toUpperCase();
+    
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.sectionHeader}>
-          <ThemedText style={styles.sectionTitle}>MY PROFILE</ThemedText>
-          <ThemedText style={styles.sectionSub}>View and update your academic portal details</ThemedText>
-        </View>
-
-        <View style={[styles.profileViewHeaderCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={styles.largeAvatar}>
-            <ThemedText style={styles.largeAvatarLetter}>
-              {studentData.name.charAt(0).toLowerCase()}
-            </ThemedText>
-          </View>
-          <ThemedText style={[styles.largeProfileName, { color: textColor }]}>{studentData.name}</ThemedText>
-          <ThemedText style={styles.largeEnrollment}>{studentData.enrollment}</ThemedText>
-          <View style={styles.largeClassBadge}>
-            <ThemedText style={styles.largeClassBadgeText}>{studentData.className.toUpperCase()}</ThemedText>
-          </View>
-        </View>
-
-        <Pressable 
-          style={[styles.profileEditBtn, { borderColor: '#ff7e40' }]} 
-          onPress={() => isEditingProfile ? saveProfileChanges() : setIsEditingProfile(true)}
+        {/* Header Banner Card */}
+        <LinearGradient
+          colors={['#101726', '#1E1420']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.profileHeaderCard}
         >
-          <Ionicons name={isEditingProfile ? "save-outline" : "create-outline"} size={14} color="#ff7e40" style={{ marginRight: 6 }} />
-          <ThemedText style={styles.profileEditBtnText}>
-            {isEditingProfile ? 'SAVE CHANGES' : 'EDIT CONTACT DETAILS'}
+          <ThemedText style={styles.profileHeaderLabel}>IDENTITY & ACCESS</ThemedText>
+          <ThemedText style={styles.profileHeaderTitle}>
+            My Digital <ThemedText style={{ color: '#FF7E40' }}>Profile</ThemedText>
           </ThemedText>
-        </Pressable>
-
-        <View style={[styles.detailGroupCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <ThemedText style={styles.detailGroupHeader}>ACADEMIC SUMMARY</ThemedText>
+          <ThemedText style={styles.profileHeaderDesc}>
+            Secured digital identity for academic access. All records are cryptographically verified by the central ERP system.
+          </ThemedText>
           
-          <View style={[styles.detailItemRow, { borderBottomColor: cardBorder }]}>
-            <ThemedText style={styles.detailItemLabel}>Class Level</ThemedText>
-            <ThemedText style={[styles.detailItemValue, { color: textColor }]}>{studentData.className}</ThemedText>
+          <Pressable 
+            onPress={handleRefresh}
+            style={({ pressed }) => [
+              styles.profileRefreshBtn,
+              pressed && { opacity: 0.8 }
+            ]}
+          >
+            <Ionicons name="refresh-outline" size={14} color="#ffffff" style={{ marginRight: 6 }} />
+            <ThemedText style={styles.profileRefreshBtnText}>Refresh Hub</ThemedText>
+          </Pressable>
+        </LinearGradient>
+
+        {/* Profile Overview Card */}
+        <View style={[styles.profileOverviewCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={styles.profileOverviewTop}>
+            <View style={[styles.profileAvatarContainer, { backgroundColor: '#5c67f2' }]}>
+              <ThemedText style={styles.profileAvatarText}>{avatarLetter}</ThemedText>
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={18} color="#10b981" />
+              </View>
+            </View>
+            
+            <View style={styles.profileNameCol}>
+              <ThemedText style={[styles.profileUsernameText, { color: textColor }]}>
+                {studentData.name}
+              </ThemedText>
+              <ThemedText style={[styles.profileFullNameText, { color: textMuted }]}>
+                {studentData.fullName}
+              </ThemedText>
+            </View>
           </View>
 
-          <View style={[styles.detailItemRow, { borderBottomColor: cardBorder }]}>
-            <ThemedText style={styles.detailItemLabel}>Section / Batch</ThemedText>
-            <ThemedText style={[styles.detailItemValue, { color: textColor }]}>Batch A - Morning</ThemedText>
-          </View>
-
-          <View style={styles.detailItemRow}>
-            <ThemedText style={styles.detailItemLabel}>Academic Advisor</ThemedText>
-            <ThemedText style={[styles.detailItemValue, { color: textColor }]}>Dr. R. K. Sen</ThemedText>
+          <View style={styles.profileBadgesRow}>
+            <View style={[styles.profileBadgePill, { backgroundColor: isDarkMode ? '#1e293b' : '#f9f6f0', borderColor: cardBorder }]}>
+              <ThemedText style={[styles.profileBadgeText, { color: isDarkMode ? '#cbd5e1' : '#4b5563' }]}>Student</ThemedText>
+            </View>
+            <View style={[styles.profileBadgePill, { backgroundColor: isDarkMode ? '#1e293b' : '#f9f6f0', borderColor: cardBorder }]}>
+              <ThemedText style={[styles.profileBadgeText, { color: isDarkMode ? '#cbd5e1' : '#4b5563' }]}>{studentData.board}</ThemedText>
+            </View>
+            <View style={[styles.profileBadgePill, { backgroundColor: isDarkMode ? '#1e293b' : '#f9f6f0', borderColor: cardBorder }]}>
+              <ThemedText style={[styles.profileBadgeText, { color: isDarkMode ? '#cbd5e1' : '#4b5563' }]}>{studentData.rank}</ThemedText>
+            </View>
+            <View style={[styles.profileBadgePill, { backgroundColor: isDarkMode ? '#1e293b' : '#f9f6f0', borderColor: cardBorder }]}>
+              <ThemedText style={[styles.profileBadgeText, { color: isDarkMode ? '#cbd5e1' : '#4b5563' }]}>{studentData.examType}</ThemedText>
+            </View>
           </View>
         </View>
 
-        <View style={[styles.detailGroupCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <ThemedText style={styles.detailGroupHeader}>CONTACT INFORMATION</ThemedText>
-          
-          <View style={[styles.detailItemRow, { borderBottomColor: cardBorder }]}>
-            <ThemedText style={styles.detailItemLabel}>Registered Email</ThemedText>
-            {isEditingProfile ? (
-              <TextInput
-                style={[styles.profileEditInput, { color: textColor, borderColor: cardBorder }]}
-                value={profileEmail}
-                onChangeText={setProfileEmail}
-              />
-            ) : (
-              <ThemedText style={[styles.detailItemValue, { color: textColor }]}>{profileEmail}</ThemedText>
-            )}
+        {/* Biodata & Contact Section */}
+        <ThemedText style={[styles.profileSectionTitle, { color: textColor }]}>Biodata & Contact</ThemedText>
+        <View style={[styles.profileDetailsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          {/* Email Row */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="mail-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>PRIMARY EMAIL</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.email}</ThemedText>
+            </View>
           </View>
 
-          <View style={[styles.detailItemRow, { borderBottomColor: cardBorder }]}>
-            <ThemedText style={styles.detailItemLabel}>Mobile Number</ThemedText>
-            {isEditingProfile ? (
-              <TextInput
-                style={[styles.profileEditInput, { color: textColor, borderColor: cardBorder }]}
-                value={profilePhone}
-                onChangeText={setProfilePhone}
-              />
-            ) : (
-              <ThemedText style={[styles.detailItemValue, { color: textColor }]}>{profilePhone}</ThemedText>
-            )}
+          {/* Mobile Row */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="call-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>MOBILE</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.mobile}</ThemedText>
+            </View>
           </View>
 
-          <View style={styles.detailItemRow}>
-            <ThemedText style={styles.detailItemLabel}>Blood Group</ThemedText>
-            {isEditingProfile ? (
-              <TextInput
-                style={[styles.profileEditInput, { color: textColor, borderColor: cardBorder }]}
-                value={profileBloodGroup}
-                onChangeText={setProfileBloodGroup}
-              />
-            ) : (
-              <ThemedText style={[styles.detailItemValue, { color: textColor }]}>{profileBloodGroup}</ThemedText>
-            )}
+          {/* Enrollment Row */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="person-circle-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>ENROLLMENT</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.enrollment}</ThemedText>
+            </View>
+          </View>
+        </View>
+
+        {/* Guardian Protocol Section */}
+        <ThemedText style={[styles.profileSectionTitle, { color: textColor }]}>Guardian Protocol</ThemedText>
+        <View style={[styles.profileDetailsCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          {/* Guardian Name */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="people-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>FULL NAME</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.guardianName}</ThemedText>
+            </View>
+          </View>
+
+          {/* Relationship */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="git-branch-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>RELATIONSHIP</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.guardianRelation}</ThemedText>
+            </View>
+          </View>
+
+          {/* Contact */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="call-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>CONTACT</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.guardianMobile}</ThemedText>
+            </View>
+          </View>
+
+          {/* Email */}
+          <View style={styles.profileDetailRow}>
+            <View style={styles.detailIconContainer}>
+              <Ionicons name="mail-outline" size={16} color="#FF7E40" />
+            </View>
+            <View style={styles.detailTextContainer}>
+              <ThemedText style={styles.detailItemLabel}>EMAIL</ThemedText>
+              <ThemedText style={[styles.detailItemValueBold, { color: textColor }]}>{studentData.guardianEmail}</ThemedText>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -1187,47 +1684,165 @@ export default function StudentDashboard() {
     );
   };
 
+  const renderMaterialsTabs = (currentTab) => {
+    return (
+      <View style={styles.materialsTabContainer}>
+        <Pressable 
+          style={[styles.materialsTabBtn, currentTab === 'videos' && styles.materialsTabBtnActive]} 
+          onPress={() => {
+            setMaterialsSearch('');
+            setActiveView('video_content');
+          }}
+        >
+          <Ionicons name="videocam" size={14} color={currentTab === 'videos' ? '#ffffff' : '#8e8e93'} style={{ marginRight: 6 }} />
+          <ThemedText style={[styles.materialsTabBtnText, currentTab === 'videos' && styles.materialsTabBtnTextActive]}>
+            Videos
+          </ThemedText>
+        </Pressable>
+        
+        <Pressable 
+          style={[styles.materialsTabBtn, currentTab === 'notes' && styles.materialsTabBtnActive]} 
+          onPress={() => {
+            setMaterialsSearch('');
+            setActiveView('notes');
+          }}
+        >
+          <Ionicons name="document-text" size={14} color={currentTab === 'notes' ? '#ffffff' : '#8e8e93'} style={{ marginRight: 6 }} />
+          <ThemedText style={[styles.materialsTabBtnText, currentTab === 'notes' && styles.materialsTabBtnTextActive]}>
+            Study Materials
+          </ThemedText>
+        </Pressable>
+
+        <Pressable 
+          style={[styles.materialsTabBtn, currentTab === 'dpps' && styles.materialsTabBtnActive]} 
+          onPress={() => {
+            setMaterialsSearch('');
+            setActiveView('dpp_questions');
+          }}
+        >
+          <Ionicons name="clipboard" size={14} color={currentTab === 'dpps' ? '#ffffff' : '#8e8e93'} style={{ marginRight: 6 }} />
+          <ThemedText style={[styles.materialsTabBtnText, currentTab === 'dpps' && styles.materialsTabBtnTextActive]}>
+            DPPs
+          </ThemedText>
+        </Pressable>
+      </View>
+    );
+  };
+
   const renderVideoContentView = () => {
     const filteredVideos = videoLectures.filter(video => 
       video.title.toLowerCase().includes(materialsSearch.toLowerCase()) ||
       video.subject.toLowerCase().includes(materialsSearch.toLowerCase())
     );
 
+    // Group filtered videos by chapter
+    const videosByChapter = {};
+    filteredVideos.forEach(video => {
+      const ch = video.chapter || 'General Lectures';
+      if (!videosByChapter[ch]) videosByChapter[ch] = [];
+      videosByChapter[ch].push(video);
+    });
+
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
+        {renderMaterialsTabs('videos')}
+
         <View style={styles.sectionHeader}>
           <ThemedText style={styles.sectionTitle}>VIDEO CONTENT</ThemedText>
           <ThemedText style={styles.sectionSub}>Watch conceptual lectures and video lessons</ThemedText>
         </View>
 
         {selectedVideo ? (
-          <View style={[styles.videoPlayerCard, { backgroundColor: '#070a13', borderColor: cardBorder }]}>
-            <View style={styles.videoMockScreen}>
-              <Ionicons 
-                name={videoPlayState ? "pause-circle" : "play-circle"} 
-                size={64} 
-                color="#ff7e40" 
-                onPress={() => setVideoPlayState(!videoPlayState)} 
-              />
-              <ThemedText style={styles.videoPlayerTimeText}>
-                {videoPlayState ? 'STREAMING LIVE' : 'STREAM PAUSED'}
-              </ThemedText>
+          <View style={[styles.videoPlayerCard, { backgroundColor: '#070a13', borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
+            {/* Header / Info Row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <ThemedText style={{ fontSize: 13, fontWeight: '900', color: '#ffffff' }} numberOfLines={1}>
+                  {selectedVideo.title}
+                </ThemedText>
+                <ThemedText style={{ fontSize: 10, color: '#8b9bb4', fontWeight: '600', marginTop: 2 }}>
+                  {selectedVideo.subject} • {selectedVideo.chapter}
+                </ThemedText>
+              </View>
+              <Pressable 
+                style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' }} 
+                onPress={() => { setSelectedVideo(null); setVideoPlayState(false); }}
+              >
+                <Ionicons name="close" size={18} color="#ffffff" />
+              </Pressable>
             </View>
 
-            <View style={styles.videoPlayerControls}>
-              <ThemedText style={styles.videoPlayingTitle} numberOfLines={1}>{selectedVideo.title}</ThemedText>
-              <ThemedText style={styles.videoPlayingTeacher}>{selectedVideo.teacher} • {selectedVideo.duration}</ThemedText>
-              
-              <View style={styles.videoPlayerSeekBarWrapper}>
-                <View style={[styles.videoPlayerSeekBar, { width: `${videoProgress * 100}%` }]} />
-              </View>
-
-              <View style={styles.videoPlayerBtnRow}>
-                <Pressable style={styles.videoClosePlayerBtn} onPress={() => { setSelectedVideo(null); setVideoPlayState(false); }}>
-                  <ThemedText style={styles.videoClosePlayerText}>CLOSE PLAYER</ThemedText>
-                </Pressable>
-              </View>
-            </View>
+            {/* Video Player */}
+            {(() => {
+              const youtubeEmbedUrl = getYouTubeEmbedUrl(selectedVideo.url);
+              if (youtubeEmbedUrl) {
+                return (
+                  <SafeWebView
+                    source={{ uri: youtubeEmbedUrl }}
+                    style={{ width: '100%', height: 220 }}
+                    allowsInlineMediaPlayback
+                    mediaPlaybackRequiresUserAction={false}
+                    javaScriptEnabled
+                    domStorageEnabled
+                    startInLoadingState
+                    renderLoading={() => (
+                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#070a13' }}>
+                        <ActivityIndicator size="large" color="#ff7e40" />
+                      </View>
+                    )}
+                  />
+                );
+              } else if (selectedVideo.url && (
+                selectedVideo.url.toLowerCase().endsWith('.mp4') ||
+                selectedVideo.url.toLowerCase().endsWith('.m3u8') ||
+                selectedVideo.url.toLowerCase().endsWith('.webm')
+              )) {
+                return (
+                  <Video
+                    ref={videoRef}
+                    source={{ uri: selectedVideo.url }}
+                    style={styles.inAppVideoPlayer}
+                    useNativeControls
+                    resizeMode={ResizeMode.CONTAIN}
+                    shouldPlay={videoPlayState}
+                    onPlaybackStatusUpdate={(status) => {
+                      if (status.isLoaded) {
+                        setVideoPlayState(status.isPlaying);
+                        if (status.durationMillis && status.positionMillis) {
+                          setVideoProgress(status.positionMillis / status.durationMillis);
+                        }
+                      }
+                    }}
+                  />
+                );
+              } else if (selectedVideo.url) {
+                return (
+                  <SafeWebView
+                    source={{ uri: selectedVideo.url }}
+                    style={{ width: '100%', height: 220 }}
+                    allowsInlineMediaPlayback
+                    mediaPlaybackRequiresUserAction={false}
+                    javaScriptEnabled
+                    domStorageEnabled
+                    startInLoadingState
+                    renderLoading={() => (
+                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#070a13' }}>
+                        <ActivityIndicator size="large" color="#ff7e40" />
+                      </View>
+                    )}
+                  />
+                );
+              } else {
+                return (
+                  <View style={{ height: 220, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 20 }}>
+                    <Ionicons name="videocam-off-outline" size={48} color="#ff7e40" />
+                    <ThemedText style={{ fontSize: 12, color: '#8b9bb4', textAlign: 'center' }}>
+                      Video link not available.
+                    </ThemedText>
+                  </View>
+                );
+              }
+            })()}
           </View>
         ) : null}
 
@@ -1242,29 +1857,54 @@ export default function StudentDashboard() {
           />
         </View>
 
-        {filteredVideos.map((video) => (
-          <Pressable 
-            key={video.id} 
-            style={[styles.videoLectureCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
-            onPress={() => { setSelectedVideo(video); setVideoPlayState(true); }}
-          >
-            <View style={styles.videoLectureLeft}>
-              <View style={styles.videoIconBg}>
-                <Ionicons name="play" size={18} color="#ff7e40" />
-              </View>
-              <View style={styles.videoTextCol}>
-                <ThemedText style={[styles.videoTitleText, { color: textColor }]} numberOfLines={1}>{video.title}</ThemedText>
-                <ThemedText style={styles.videoTeacherText}>{video.teacher} • {video.duration}</ThemedText>
-              </View>
+        {Object.keys(videosByChapter).map((chapterName) => (
+          <View key={chapterName} style={styles.chapterSectionWrapper}>
+            <View style={[styles.chapterHeaderCard, { backgroundColor: isDarkMode ? '#141c2c' : '#eff4f9', borderColor: cardBorder }]}>
+              <Ionicons name="folder-open" size={16} color="#ff7e40" style={{ marginRight: 8 }} />
+              <ThemedText style={[styles.chapterHeaderText, { color: textColor }]}>
+                {chapterName.toUpperCase()}
+              </ThemedText>
             </View>
 
-            <View style={styles.videoBadgeCol}>
-              <View style={styles.subjectBadge}>
-                <ThemedText style={styles.subjectBadgeText}>{video.subject.toUpperCase()}</ThemedText>
-              </View>
-              <ThemedText style={styles.videoViewsText}>{video.views} views</ThemedText>
-            </View>
-          </Pressable>
+            {videosByChapter[chapterName].map((video) => (
+              <Pressable 
+                key={video.id} 
+                style={[styles.videoLectureCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                onPress={() => {
+                  if (video.url) {
+                    setSelectedVideo(video);
+                    setVideoPlayState(true);
+                  } else {
+                    Alert.alert('Not Available', 'Video will be available once uploaded by your instructor.');
+                  }
+                }}
+              >
+                <View style={styles.videoLectureLeft}>
+                  <View style={styles.videoIconBg}>
+                    <Ionicons name="play" size={18} color="#ff7e40" />
+                  </View>
+                  <View style={styles.videoTextCol}>
+                    <ThemedText style={[styles.videoTitleText, { color: textColor }]} numberOfLines={1}>{video.title}</ThemedText>
+                    <ThemedText style={styles.videoTeacherText}>{video.teacher} • {video.duration}</ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.videoBadgeCol}>
+                  <View style={styles.subjectBadge}>
+                    <ThemedText style={styles.subjectBadgeText}>{video.subject.toUpperCase()}</ThemedText>
+                  </View>
+                  {video.url && !video.url.toLowerCase().endsWith('.mp4') ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                      <Ionicons name="logo-youtube" size={12} color="#ff0000" />
+                      <ThemedText style={[styles.videoViewsText, { color: '#ff0000' }]}>YouTube</ThemedText>
+                    </View>
+                  ) : (
+                    <ThemedText style={styles.videoViewsText}>{video.views !== '—' ? `${video.views} views` : 'Tap to play'}</ThemedText>
+                  )}
+                </View>
+              </Pressable>
+            ))}
+          </View>
         ))}
       </ScrollView>
     );
@@ -1276,12 +1916,130 @@ export default function StudentDashboard() {
       note.subject.toLowerCase().includes(materialsSearch.toLowerCase())
     );
 
+    // Group filtered notes by chapter
+    const notesByChapter = {};
+    filteredNotes.forEach(note => {
+      const ch = note.chapter || 'General Materials';
+      if (!notesByChapter[ch]) notesByChapter[ch] = [];
+      notesByChapter[ch].push(note);
+    });
+
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
+        {renderMaterialsTabs('notes')}
+
         <View style={styles.sectionHeader}>
           <ThemedText style={styles.sectionTitle}>STUDY NOTES</ThemedText>
-          <ThemedText style={styles.sectionSub}>Download PDF hand-outs and formula cheat sheets</ThemedText>
+          <ThemedText style={styles.sectionSub}>Read and download PDF handouts and cheat sheets</ThemedText>
         </View>
+
+        {selectedPdf ? (
+          <View style={[styles.pdfReaderCard, { backgroundColor: '#070a13', borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
+            {/* Header / Info Row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <ThemedText style={{ fontSize: 13, fontWeight: '900', color: '#ffffff' }} numberOfLines={1}>
+                  {selectedPdf.title}
+                </ThemedText>
+                <ThemedText style={{ fontSize: 10, color: '#8b9bb4', fontWeight: '600', marginTop: 2 }}>
+                  {selectedPdf.subject} • {selectedPdf.chapter}
+                </ThemedText>
+              </View>
+              <Pressable 
+                style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' }} 
+                onPress={() => { setSelectedPdf(null); setPdfZoom(1.0); setPdfPage(1); }}
+              >
+                <Ionicons name="close" size={18} color="#ffffff" />
+              </Pressable>
+            </View>
+
+            {/* PDF Content */}
+            {selectedPdf.url ? (
+              // ── Real PDF URL: render in WebView using Google Docs Viewer ──
+              <SafeWebView
+                source={{ uri: `https://docs.google.com/viewer?url=${encodeURIComponent(selectedPdf.url)}&embedded=true` }}
+                style={{ width: '100%', height: 400 }}
+                javaScriptEnabled
+                domStorageEnabled
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#070a13' }}>
+                    <ActivityIndicator size="large" color="#ff7e40" />
+                  </View>
+                )}
+              />
+            ) : (
+              // ── Mock PDF: render the interactive mock pages ──
+              <View style={{ padding: 16, gap: 14 }}>
+                <View style={styles.pdfMockPageContainer}>
+                  <ScrollView 
+                    horizontal 
+                    contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', width: '100%' }}
+                    showsHorizontalScrollIndicator={false}
+                  >
+                    <View style={[styles.pdfMockPage, { transform: [{ scale: pdfZoom }] }]}>
+                      <Ionicons name="document-text" size={48} color="#ef4444" style={{ marginBottom: 12 }} />
+                      <ThemedText style={styles.pdfMockPageTextHeader}>
+                        {selectedPdf.title.toUpperCase()}
+                      </ThemedText>
+                      <ThemedText style={styles.pdfMockPageTextSub}>
+                        Official Study Notes • Pathfinder Learning Portal
+                      </ThemedText>
+                      <View style={styles.pdfMockLine} />
+                      <View style={styles.pdfMockLine} />
+                      <View style={[styles.pdfMockLine, { width: '80%' }]} />
+                      <View style={styles.pdfMockLine} />
+                      <View style={[styles.pdfMockLine, { width: '50%' }]} />
+                      <ThemedText style={styles.pdfPageNumberLabel}>
+                        [ PAGE {pdfPage} / 6 ]
+                      </ThemedText>
+                    </View>
+                  </ScrollView>
+                </View>
+
+                <View style={styles.pdfReaderControls}>
+                  <View style={styles.pdfZoomControls}>
+                    <Pressable 
+                      style={styles.pdfZoomBtn} 
+                      disabled={pdfZoom <= 0.8}
+                      onPress={() => setPdfZoom(prev => Math.max(0.8, prev - 0.1))}
+                    >
+                      <Ionicons name="remove-circle-outline" size={20} color="#ffffff" />
+                    </Pressable>
+                    <ThemedText style={styles.pdfZoomText}>Zoom</ThemedText>
+                    <Pressable 
+                      style={styles.pdfZoomBtn} 
+                      disabled={pdfZoom >= 1.5}
+                      onPress={() => setPdfZoom(prev => Math.min(1.5, prev + 0.1))}
+                    >
+                      <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.pdfPageControls}>
+                    <Pressable 
+                      style={[styles.pdfPageNavBtn, pdfPage === 1 && { opacity: 0.5 }]}
+                      disabled={pdfPage === 1}
+                      onPress={() => setPdfPage(prev => Math.max(1, prev - 1))}
+                    >
+                      <Ionicons name="chevron-back" size={20} color="#ffffff" />
+                    </Pressable>
+                    <ThemedText style={styles.pdfPageIndicatorText}>
+                      {pdfPage} / 6
+                    </ThemedText>
+                    <Pressable 
+                      style={[styles.pdfPageNavBtn, pdfPage === 6 && { opacity: 0.5 }]}
+                      disabled={pdfPage === 6}
+                      onPress={() => setPdfPage(prev => Math.min(6, prev + 1))}
+                    >
+                      <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        ) : null}
 
         <View style={[styles.searchBoxWrapper, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <Ionicons name="search" size={16} color={textMuted} />
@@ -1294,24 +2052,54 @@ export default function StudentDashboard() {
           />
         </View>
 
-        {filteredNotes.map((note) => (
-          <View key={note.id} style={[styles.notesCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.notesCardLeft}>
-              <View style={styles.pdfIconBg}>
-                <Ionicons name="document-text" size={20} color="#ef4444" />
-              </View>
-              <View style={styles.notesTextCol}>
-                <ThemedText style={[styles.notesTitleText, { color: textColor }]} numberOfLines={1}>{note.title}</ThemedText>
-                <ThemedText style={styles.notesSpecsText}>{note.subject} • {note.size} • {note.format}</ThemedText>
-              </View>
+        {Object.keys(notesByChapter).map((chapterName) => (
+          <View key={chapterName} style={styles.chapterSectionWrapper}>
+            <View style={[styles.chapterHeaderCard, { backgroundColor: isDarkMode ? '#141c2c' : '#eff4f9', borderColor: cardBorder }]}>
+              <Ionicons name="folder-open" size={16} color="#ff7e40" style={{ marginRight: 8 }} />
+              <ThemedText style={[styles.chapterHeaderText, { color: textColor }]}>
+                {chapterName.toUpperCase()}
+              </ThemedText>
             </View>
 
-            <Pressable 
-              style={styles.notesDownloadBtn}
-              onPress={() => Alert.alert('File Saved', `PDF Document downloaded successfully: ${note.title}`)}
-            >
-              <Ionicons name="arrow-down-circle" size={24} color="#ff7e40" />
-            </Pressable>
+            {notesByChapter[chapterName].map((note) => (
+              <Pressable 
+                key={note.id} 
+                style={[styles.notesCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                onPress={() => {
+                  setSelectedPdf(note);
+                  setPdfZoom(1.0);
+                  setPdfPage(1);
+                }}
+              >
+                <View style={styles.notesCardLeft}>
+                  <View style={styles.pdfIconBg}>
+                    <Ionicons name="document-text" size={20} color="#ef4444" />
+                  </View>
+                  <View style={styles.notesTextCol}>
+                    <ThemedText style={[styles.notesTitleText, { color: textColor }]} numberOfLines={1}>{note.title}</ThemedText>
+                    <ThemedText style={styles.notesSpecsText}>{note.subject} • {note.size} • {note.format}</ThemedText>
+                  </View>
+                </View>
+
+                <Pressable 
+                  style={styles.notesDownloadBtn}
+                  onPress={async (e) => {
+                    e.stopPropagation();
+                    if (note.url) {
+                      try {
+                        await WebBrowser.openBrowserAsync(note.url);
+                      } catch (err) {
+                        Linking.openURL(note.url);
+                      }
+                    } else {
+                      Alert.alert('Not Available', 'PDF will be available once uploaded by your instructor.');
+                    }
+                  }}
+                >
+                  <Ionicons name="arrow-down-circle" size={24} color="#ff7e40" />
+                </Pressable>
+              </Pressable>
+            ))}
           </View>
         ))}
       </ScrollView>
@@ -1320,23 +2108,7 @@ export default function StudentDashboard() {
 
   const renderDppQuestionsView = () => {
     if (activeDppAttempt) {
-      const questions = [
-        {
-          q: "1. If a particle has constant positive acceleration, what is the shape of its position-time graph?",
-          opt: ["A) Straight diagonal line", "B) Parabola opening upwards", "C) Parabola opening downwards", "D) Sinusoidal curve"],
-          ans: 1
-        },
-        {
-          q: "2. Which of the following defines electric flux through a surface?",
-          opt: ["A) ∫ E • dA", "B) ∫ E x dA", "C) E / q", "D) q / E"],
-          ans: 0
-        },
-        {
-          q: "3. What is the derivative of x^x with respect to x?",
-          opt: ["A) x * x^(x-1)", "B) x^x * (1 + ln x)", "C) x^x * ln x", "D) e^x"],
-          ans: 1
-        }
-      ];
+      const questions = getDppQuestions(activeDppAttempt);
 
       return (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
@@ -1421,38 +2193,176 @@ export default function StudentDashboard() {
       );
     }
 
+    // Group DPPs by chapter
+    const dppsByChapter = {};
+    dppQuestions.forEach(dpp => {
+      const ch = dpp.chapter || 'General DPPs';
+      if (!dppsByChapter[ch]) dppsByChapter[ch] = [];
+      dppsByChapter[ch].push(dpp);
+    });
+
     return (
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContainer}>
+        {renderMaterialsTabs('dpps')}
+
         <View style={styles.sectionHeader}>
           <ThemedText style={styles.sectionTitle}>DPP PROBLEMS</ThemedText>
           <ThemedText style={styles.sectionSub}>Attempt Daily Practice Problems and receive grades</ThemedText>
         </View>
 
-        {dppQuestions.map((dpp) => (
-          <View key={dpp.id} style={[styles.dppCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.dppCardLeft}>
-              <View style={styles.dppCodeIconBg}>
-                <Ionicons name="checkbox-outline" size={16} color="#ff7e40" />
-              </View>
-              <View style={styles.dppTextCol}>
-                <ThemedText style={[styles.dppTitleText, { color: textColor }]} numberOfLines={1}>{dpp.title}</ThemedText>
-                <ThemedText style={styles.dppSpecsText}>
-                  {dpp.subject} • {dpp.questions} MCQ Questions
+        {selectedPdf ? (
+          <View style={[styles.pdfReaderCard, { backgroundColor: '#070a13', borderColor: cardBorder, padding: 0, overflow: 'hidden' }]}>
+            {/* Header / Info Row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <ThemedText style={{ fontSize: 13, fontWeight: '900', color: '#ffffff' }} numberOfLines={1}>
+                  {selectedPdf.title}
+                </ThemedText>
+                <ThemedText style={{ fontSize: 10, color: '#8b9bb4', fontWeight: '600', marginTop: 2 }}>
+                  {selectedPdf.subject} • {selectedPdf.chapter}
                 </ThemedText>
               </View>
+              <Pressable 
+                style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' }} 
+                onPress={() => { setSelectedPdf(null); setPdfZoom(1.0); setPdfPage(1); }}
+              >
+                <Ionicons name="close" size={18} color="#ffffff" />
+              </Pressable>
             </View>
 
-            <View style={styles.dppActionCol}>
-              {dpp.status === 'Attempted' ? (
-                <View style={styles.dppScoreBadge}>
-                  <ThemedText style={styles.dppScoreText}>{dpp.score}</ThemedText>
+            {/* PDF Content */}
+            {selectedPdf.url ? (
+              // ── Real PDF URL: render in WebView using Google Docs Viewer ──
+              <SafeWebView
+                source={{ uri: `https://docs.google.com/viewer?url=${encodeURIComponent(selectedPdf.url)}&embedded=true` }}
+                style={{ width: '100%', height: 400 }}
+                javaScriptEnabled
+                domStorageEnabled
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: '#070a13' }}>
+                    <ActivityIndicator size="large" color="#ff7e40" />
+                  </View>
+                )}
+              />
+            ) : (
+              // ── Mock PDF: render the interactive mock pages ──
+              <View style={{ padding: 16, gap: 14 }}>
+                <View style={styles.pdfMockPageContainer}>
+                  <ScrollView 
+                    horizontal 
+                    contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', width: '100%' }}
+                    showsHorizontalScrollIndicator={false}
+                  >
+                    <View style={[styles.pdfMockPage, { transform: [{ scale: pdfZoom }] }]}>
+                      <Ionicons name="document-text" size={48} color="#ef4444" style={{ marginBottom: 12 }} />
+                      <ThemedText style={styles.pdfMockPageTextHeader}>
+                        {selectedPdf.title.toUpperCase()}
+                      </ThemedText>
+                      <ThemedText style={styles.pdfMockPageTextSub}>
+                        Official Study Notes • Pathfinder Learning Portal
+                      </ThemedText>
+                      <View style={styles.pdfMockLine} />
+                      <View style={styles.pdfMockLine} />
+                      <View style={[styles.pdfMockLine, { width: '80%' }]} />
+                      <View style={styles.pdfMockLine} />
+                      <View style={[styles.pdfMockLine, { width: '50%' }]} />
+                      <ThemedText style={styles.pdfPageNumberLabel}>
+                        [ PAGE {pdfPage} / 6 ]
+                      </ThemedText>
+                    </View>
+                  </ScrollView>
                 </View>
-              ) : (
-                <Pressable style={styles.dppAttemptBtn} onPress={() => handleStartDpp(dpp)}>
-                  <ThemedText style={styles.dppAttemptBtnText}>ATTEMPT</ThemedText>
-                </Pressable>
-              )}
+
+                <View style={styles.pdfReaderControls}>
+                  <View style={styles.pdfZoomControls}>
+                    <Pressable 
+                      style={styles.pdfZoomBtn} 
+                      disabled={pdfZoom <= 0.8}
+                      onPress={() => setPdfZoom(prev => Math.max(0.8, prev - 0.1))}
+                    >
+                      <Ionicons name="remove-circle-outline" size={20} color="#ffffff" />
+                    </Pressable>
+                    <ThemedText style={styles.pdfZoomText}>Zoom</ThemedText>
+                    <Pressable 
+                      style={styles.pdfZoomBtn} 
+                      disabled={pdfZoom >= 1.5}
+                      onPress={() => setPdfZoom(prev => Math.min(1.5, prev + 0.1))}
+                    >
+                      <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.pdfPageControls}>
+                    <Pressable 
+                      style={[styles.pdfPageNavBtn, pdfPage === 1 && { opacity: 0.5 }]}
+                      disabled={pdfPage === 1}
+                      onPress={() => setPdfPage(prev => Math.max(1, prev - 1))}
+                    >
+                      <Ionicons name="chevron-back" size={20} color="#ffffff" />
+                    </Pressable>
+                    <ThemedText style={styles.pdfPageIndicatorText}>
+                      {pdfPage} / 6
+                    </ThemedText>
+                    <Pressable 
+                      style={[styles.pdfPageNavBtn, pdfPage === 6 && { opacity: 0.5 }]}
+                      disabled={pdfPage === 6}
+                      onPress={() => setPdfPage(prev => Math.min(6, prev + 1))}
+                    >
+                      <Ionicons name="chevron-forward" size={20} color="#ffffff" />
+                    </Pressable>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        ) : null}
+
+        {Object.keys(dppsByChapter).map((chapterName) => (
+          <View key={chapterName} style={styles.chapterSectionWrapper}>
+            <View style={[styles.chapterHeaderCard, { backgroundColor: isDarkMode ? '#141c2c' : '#eff4f9', borderColor: cardBorder }]}>
+              <Ionicons name="folder-open" size={16} color="#ff7e40" style={{ marginRight: 8 }} />
+              <ThemedText style={[styles.chapterHeaderText, { color: textColor }]}>
+                {chapterName.toUpperCase()}
+              </ThemedText>
             </View>
+
+            {dppsByChapter[chapterName].map((dpp) => (
+              <Pressable 
+                key={dpp.id} 
+                style={[styles.dppCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                onPress={() => {
+                  setSelectedPdf(dpp);
+                  setPdfZoom(1.0);
+                  setPdfPage(1);
+                }}
+              >
+                <View style={styles.dppCardLeft}>
+                  <View style={styles.dppCodeIconBg}>
+                    <Ionicons name="checkbox-outline" size={16} color="#ff7e40" />
+                  </View>
+                  <View style={styles.dppTextCol}>
+                    <ThemedText style={[styles.dppTitleText, { color: textColor }]} numberOfLines={1}>{dpp.title}</ThemedText>
+                    <ThemedText style={styles.dppSpecsText}>
+                      {dpp.subject} • {dpp.questions} MCQ Questions
+                    </ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.dppActionCol}>
+                  <Pressable 
+                    style={styles.dppAttemptBtn} 
+                    onPress={() => {
+                      setSelectedPdf(dpp);
+                      setPdfZoom(1.0);
+                      setPdfPage(1);
+                    }}
+                  >
+                    <ThemedText style={styles.dppAttemptBtnText}>VIEW</ThemedText>
+                  </Pressable>
+                </View>
+              </Pressable>
+            ))}
           </View>
         ))}
       </ScrollView>
@@ -1959,8 +2869,57 @@ export default function StudentDashboard() {
     );
   };
 
+  const renderAllModulesView = () => {
+    const modules = [
+      { id: 'nexus', label: 'Nexus', icon: 'compass-outline' },
+      { id: 'profile', label: 'Profile', icon: 'person-outline' },
+      { id: 'attendance', label: 'Attendance', icon: 'checkbox-outline' },
+      { id: 'video_content', label: 'Materials', icon: 'book-outline' },
+      { id: 'performance', label: 'Performance', icon: 'trending-up-outline' },
+      { id: 'analytics', label: 'Analytics', icon: 'bar-chart-outline' },
+      { id: 'grievances', label: 'Grievances', icon: 'alert-circle-outline' },
+      { id: 'doubts', label: 'Doubts', icon: 'help-circle-outline' },
+      { id: 'planner', label: 'Planner', icon: 'calendar-outline' }
+    ];
+
+    return (
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContainer, { backgroundColor: customBg }]}>
+        <View style={styles.allModulesHeader}>
+          <ThemedText style={[styles.allModulesTitle, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+            All Modules
+          </ThemedText>
+          <Pressable 
+            onPress={() => setActiveView('dashboard')}
+            style={styles.allModulesCloseBtn}
+          >
+            <Ionicons name="close" size={20} color="#ff7e40" />
+          </Pressable>
+        </View>
+
+        <View style={styles.allModulesGrid}>
+          {modules.map((item) => (
+            <Pressable
+              key={item.id}
+              onPress={() => handleSidebarItemClick(item.id)}
+              style={[styles.allModulesCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            >
+              <View style={[styles.allModulesIconBg, { backgroundColor: isDarkMode ? '#1e293b' : '#f8f6f3' }]}>
+                <Ionicons name={item.icon} size={22} color={isDarkMode ? '#ffffff' : '#111827'} />
+              </View>
+              <ThemedText style={[styles.allModulesCardLabel, { color: isDarkMode ? '#d1d5db' : '#374151' }]}>
+                {item.label}
+              </ThemedText>
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    );
+  };
+
   const renderActiveViewContent = () => {
     switch (activeView) {
+      case 'all_modules':
+        return renderAllModulesView();
       case 'dashboard':
         return renderDashboardView();
       case 'nexus':
@@ -2154,79 +3113,309 @@ export default function StudentDashboard() {
     );
   };
 
+  const displayNotices = apiNotices.length > 0 ? apiNotices.map((n, index) => {
+    const title = n.title || n.subject || 'Notice';
+    const body = n.content || n.body || n.description || '';
+    let timeLabel = 'Just now';
+    if (n.created_at || n.date) {
+      const dateObj = new Date(n.created_at || n.date);
+      if (!isNaN(dateObj.getTime())) {
+        const diffMs = Date.now() - dateObj.getTime();
+        const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+        if (diffHrs < 1) {
+          timeLabel = 'Just now';
+        } else if (diffHrs < 24) {
+          timeLabel = `${diffHrs}h ago`;
+        } else {
+          timeLabel = `${Math.floor(diffHrs / 24)}d ago`;
+        }
+      }
+    } else {
+      timeLabel = n.time || '1h ago';
+    }
+    return { id: n.id || String(index), title, body, time: timeLabel };
+  }) : [
+    { id: '1', title: 'New result published', time: '2h ago', body: 'Study Planner for Class 11 (JEE) is now available.' },
+    { id: '2', title: 'Class reminder', time: '5h ago', body: 'Physics live session starts in 30 minutes.' },
+    { id: '3', title: 'Streak alert', time: '1d ago', body: 'You\'re on a 2-day study streak. Keep going!' }
+  ];
+
   return (
     <View style={[styles.container, { backgroundColor: customBg }]}>
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />
 
+      {profileMenuOpen && (
+        <>
+          <Pressable 
+            style={styles.popoverBackdrop} 
+            onPress={() => setProfileMenuOpen(false)}
+          />
+          <View style={[styles.popoverCard, { backgroundColor: cardBg, borderColor: cardBorder, top: Math.max(insets.top, 12) + 48 }]}>
+            <View style={styles.popoverHeader}>
+              <ThemedText style={[styles.popoverName, { color: textColor }]}>
+                {studentData.name}
+              </ThemedText>
+              <ThemedText style={[styles.popoverEnrollment, { color: textMuted }]}>
+                Enrollment: <ThemedText style={{ color: '#FF7E40', fontWeight: '700' }}>{studentData.enrollment}</ThemedText>
+              </ThemedText>
+            </View>
+            <View style={[styles.popoverDivider, { backgroundColor: cardBorder }]} />
+            
+            <Pressable 
+              onPress={() => {
+                setProfileMenuOpen(false);
+                setActiveView('profile');
+              }}
+              style={({ pressed }) => [
+                styles.popoverItem,
+                pressed && { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }
+              ]}
+            >
+              <Ionicons name="person-outline" size={16} color={textColor} />
+              <ThemedText style={[styles.popoverItemText, { color: textColor }]}>
+                My Profile
+              </ThemedText>
+            </Pressable>
+
+            <Pressable 
+              onPress={() => {
+                setProfileMenuOpen(false);
+                handleLogoutConfirm();
+              }}
+              style={({ pressed }) => [
+                styles.popoverItem,
+                pressed && { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }
+              ]}
+            >
+              <Ionicons name="log-out-outline" size={16} color="#ef4444" />
+              <ThemedText style={[styles.popoverItemText, { color: '#ef4444' }]}>
+                Sign out
+              </ThemedText>
+            </Pressable>
+          </View>
+        </>
+      )}
+
+      {showNotifications && (
+        <View style={styles.dialogOverlay}>
+          <Pressable style={styles.dialogBackdrop} onPress={() => setShowNotifications(false)} />
+          <View style={[styles.notificationsCard, { backgroundColor: cardBg, borderColor: cardBorder, top: Math.max(insets.top, 12) + 48 }]}>
+            <View style={styles.notificationsHeader}>
+              <ThemedText style={[styles.notificationsTitle, { color: textColor }]}>Notifications</ThemedText>
+              <Pressable 
+                onPress={() => setShowNotifications(false)}
+                style={styles.notificationsCloseBtn}
+              >
+                <Ionicons name="close" size={16} color="#ff7e40" />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300 }}>
+              {displayNotices.map((item) => (
+                <View key={item.id} style={[styles.notificationItemCard, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.02)' : '#ffffff', borderColor: cardBorder }]}>
+                  <View style={styles.notificationItemHeader}>
+                    <ThemedText style={[styles.notificationItemTitle, { color: textColor }]}>{item.title}</ThemedText>
+                    <ThemedText style={[styles.notificationItemTime, { color: textMuted }]}>{item.time}</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.notificationItemBody, { color: textMuted }]}>{item.body}</ThemedText>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      )}
+
+      {showLogoutConfirm && (
+        <View style={styles.dialogOverlay}>
+          <Pressable style={styles.dialogBackdrop} onPress={() => setShowLogoutConfirm(false)} />
+          <View style={[styles.dialogCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={styles.dialogHeader}>
+              <View style={styles.dialogIconContainer}>
+                <Ionicons name="log-out-outline" size={28} color="#ef4444" />
+              </View>
+              <ThemedText style={[styles.dialogTitle, { color: textColor }]}>Sign Out</ThemedText>
+              <ThemedText style={[styles.dialogMessage, { color: textMuted }]}>
+                Are you sure you want to sign out?
+              </ThemedText>
+            </View>
+            <View style={styles.dialogActions}>
+              <Pressable 
+                onPress={() => setShowLogoutConfirm(false)}
+                style={[styles.dialogBtn, styles.dialogBtnCancel, { borderColor: cardBorder }]}
+              >
+                <ThemedText style={[styles.dialogBtnCancelText, { color: textColor }]}>No</ThemedText>
+              </Pressable>
+              <Pressable 
+                onPress={() => {
+                  setShowLogoutConfirm(false);
+                  handleLogout();
+                }}
+                style={[styles.dialogBtn, styles.dialogBtnConfirm]}
+              >
+                <ThemedText style={styles.dialogBtnConfirmText}>Yes</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+
       <View style={styles.shell}>
-        {isLargeScreen ? (
+        {isLargeScreen && (
           <View style={[styles.sidebar, { backgroundColor: '#070a13', borderRightColor: cardBorder }]}>
             <SidebarContent />
           </View>
-        ) : (
-          <>
-            {sidebarOpen && (
-              <Pressable style={styles.drawerBackdrop} onPress={toggleSidebar}>
-                <View style={styles.backdropBg} />
-              </Pressable>
-            )}
-            <Animated.View style={[styles.mobileDrawer, { transform: [{ translateX: drawerAnim }], backgroundColor: '#070a13' }]}>
-              <SidebarContent />
-            </Animated.View>
-          </>
         )}
 
         <View style={styles.mainArea}>
-          <View style={[styles.header, { borderBottomColor: cardBorder, paddingTop: Math.max(insets.top, 12) }]}>
-            <View style={styles.headerLeft}>
-              {!isLargeScreen && (
-                <Pressable onPress={toggleSidebar} style={styles.hamburgerBtn}>
-                  <Ionicons name="menu-outline" size={24} color={textColor} />
-                </Pressable>
-              )}
-              
-              <View style={styles.logoSquare}>
-                <Ionicons name="school" size={16} color="#ffffff" />
+          {activeView !== 'all_modules' && (
+            <View style={[
+              styles.header, 
+              { 
+                borderBottomColor: activeView === 'dashboard' ? 'transparent' : cardBorder, 
+                backgroundColor: customBg, 
+                paddingTop: Math.max(insets.top, 12) 
+              }
+            ]}>
+              <View style={styles.headerLeft}>
+                
+                
+                {activeView === 'dashboard' ? (
+                  <View style={{ gap: 2 }}>
+                    <ThemedText style={[styles.dashboardHeaderTitle, { color: isDarkMode ? '#ffffff' : '#111827' }]}>
+                      Dashboard
+                    </ThemedText>
+                    <ThemedText style={[styles.dashboardHeaderSub, { color: textMuted }]}>
+                      Student Learning Portal
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.logoSquare}>
+                      <Ionicons name="school" size={16} color="#ffffff" />
+                    </View>
+                    <ThemedText style={[styles.headerTitle, { color: textColor }]}>
+                      {activeView.toUpperCase().replace('_', ' ')}
+                    </ThemedText>
+                  </>
+                )}
               </View>
-              <ThemedText style={[styles.headerTitle, { color: textColor }]}>
-                {activeView === 'dashboard' ? 'STUDY PORTAL' : activeView.toUpperCase().replace('_', ' ')}
-              </ThemedText>
-            </View>
 
-            <View style={styles.headerRight}>
-              <Pressable
-                onPress={toggleTheme}
-                style={[styles.headerBtn, { backgroundColor: isDarkMode ? '#101726' : '#ffffff', borderColor: cardBorder }]}
-              >
-                <FontAwesome name={isDarkMode ? 'sun-o' : 'moon-o'} size={14} color={isDarkMode ? '#ff7e40' : '#4a2d1b'} />
-              </Pressable>
-              
-              <Pressable
-                onPress={handleLogout}
-                style={[styles.headerBtn, styles.logoutBtn]}
-              >
-                <Ionicons name="log-out-outline" size={16} color="#ffffff" />
-              </Pressable>
+              <View style={styles.headerRight}>
+                {activeView === 'dashboard' && (
+                  <Pressable 
+                    onPress={() => {
+                      fetchNotices();
+                      setShowNotifications(true);
+                    }}
+                    style={styles.headerIconBtn}
+                  >
+                    <Ionicons name="notifications-outline" size={22} color={isDarkMode ? '#ffffff' : '#374151'} />
+                    <View style={styles.notificationDot} />
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={toggleTheme}
+                  style={activeView === 'dashboard' ? styles.headerIconBtn : [styles.headerBtn, { backgroundColor: isDarkMode ? '#101726' : '#ffffff', borderColor: cardBorder }]}
+                >
+                  <Ionicons 
+                    name={isDarkMode ? 'sunny-outline' : 'moon-outline'} 
+                    size={activeView === 'dashboard' ? 22 : 14} 
+                    color={isDarkMode ? '#ffffff' : '#374151'} 
+                  />
+                </Pressable>
+                
+                {activeView === 'dashboard' ? (
+                  <Pressable onPress={() => setProfileMenuOpen(!profileMenuOpen)} style={styles.headerAvatar}>
+                    <ThemedText style={styles.headerAvatarText}>
+                      {(studentData.name || 'f').charAt(0).toUpperCase()}
+                    </ThemedText>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={handleLogoutConfirm}
+                    style={[styles.headerBtn, styles.logoutBtn]}
+                  >
+                    <Ionicons name="log-out-outline" size={16} color="#ffffff" />
+                  </Pressable>
+                )}
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.viewContentWrapper}>
             {renderActiveViewContent()}
           </View>
 
-          {activeView === 'dashboard' && (
-            <View style={[styles.stickyFooter, { borderTopColor: cardBorder, backgroundColor: isDarkMode ? '#0d131f' : '#ffffff' }]}>
-              <View style={styles.footerInfo}>
-                <View style={styles.alertIconBg}>
-                  <Ionicons name="alert" size={14} color="#ff7e40" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={[styles.footerAlertTitle, { color: textColor }]}>STUDY PLANNER COUNTDOWN</ThemedText>
-                  <ThemedText style={styles.footerAlertSub}>Upcoming deadline for assignments</ThemedText>
-                </View>
-              </View>
-              <Pressable style={styles.footerActionBtn} onPress={() => setActiveView('planner')}>
-                <ThemedText style={styles.footerActionBtnText}>GO TO PLANNER</ThemedText>
+          {!isLargeScreen && (
+            <View style={[styles.bottomTabBar, { borderTopColor: cardBorder, backgroundColor: isDarkMode ? '#101726' : '#ffffff' }]}>
+              <Pressable 
+                onPress={() => setActiveView('dashboard')} 
+                style={styles.tabBarItem}
+              >
+                <Ionicons 
+                  name={activeView === 'dashboard' ? 'grid' : 'grid-outline'} 
+                  size={20} 
+                  color={activeView === 'dashboard' ? '#FF7E40' : '#8e8e93'} 
+                />
+                <ThemedText style={[styles.tabBarLabel, { color: activeView === 'dashboard' ? '#FF7E40' : '#8e8e93' }]}>
+                  Home
+                </ThemedText>
+              </Pressable>
+
+              <Pressable 
+                onPress={() => setActiveView('classes')} 
+                style={styles.tabBarItem}
+              >
+                <Ionicons 
+                  name={activeView === 'classes' ? 'calendar' : 'calendar-outline'} 
+                  size={20} 
+                  color={activeView === 'classes' ? '#FF7E40' : '#8e8e93'} 
+                />
+                <ThemedText style={[styles.tabBarLabel, { color: activeView === 'classes' ? '#FF7E40' : '#8e8e93' }]}>
+                  Classes
+                </ThemedText>
+              </Pressable>
+
+              <Pressable 
+                onPress={() => setActiveView('exams')} 
+                style={styles.tabBarItem}
+              >
+                <Ionicons 
+                  name={activeView === 'exams' ? 'document-text' : 'document-text-outline'} 
+                  size={20} 
+                  color={activeView === 'exams' ? '#FF7E40' : '#8e8e93'} 
+                />
+                <ThemedText style={[styles.tabBarLabel, { color: activeView === 'exams' ? '#FF7E40' : '#8e8e93' }]}>
+                  Exams
+                </ThemedText>
+              </Pressable>
+
+              <Pressable 
+                onPress={() => setActiveView('results')} 
+                style={styles.tabBarItem}
+              >
+                <Ionicons 
+                  name={activeView === 'results' ? 'trophy' : 'trophy-outline'} 
+                  size={20} 
+                  color={activeView === 'results' ? '#FF7E40' : '#8e8e93'} 
+                />
+                <ThemedText style={[styles.tabBarLabel, { color: activeView === 'results' ? '#FF7E40' : '#8e8e93' }]}>
+                  Results
+                </ThemedText>
+              </Pressable>
+
+              <Pressable 
+                onPress={() => setActiveView('all_modules')} 
+                style={styles.tabBarItem}
+              >
+                <Ionicons 
+                  name={activeView === 'all_modules' ? 'apps' : 'apps-outline'} 
+                  size={20} 
+                  color={activeView === 'all_modules' ? '#FF7E40' : '#8e8e93'} 
+                />
+                <ThemedText style={[styles.tabBarLabel, { color: activeView === 'all_modules' ? '#FF7E40' : '#8e8e93' }]}>
+                  More
+                </ThemedText>
               </Pressable>
             </View>
           )}
@@ -3466,6 +4655,33 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
   },
+  inAppVideoPlayer: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    backgroundColor: '#000',
+    marginBottom: 12,
+  },
+  videoExternalLinkCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  videoOpenExternalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ff7e40',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    marginTop: 4,
+  },
+  videoOpenExternalText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
   searchBoxWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4092,5 +5308,786 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     fontWeight: '500',
+  },
+  // --- NEW DASHBOARD REDESIGN STYLES ---
+  dashboardHeaderTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  dashboardHeaderSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#FF7E40',
+  },
+  headerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FF7E40',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  headerAvatarText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  welcomeBannerCard: {
+    borderRadius: 24,
+    padding: 24,
+    gap: 16,
+    marginBottom: 8,
+  },
+  welcomeBannerHeader: {
+    gap: 8,
+  },
+  welcomeBannerLabel: {
+    color: '#FF7E40',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  welcomeBannerHeading: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  welcomeBannerDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9ca3af',
+    fontWeight: '500',
+  },
+  welcomeBannerRefreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  welcomeBannerRefreshBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  studentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+    gap: 16,
+  },
+  studentCardAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#FF7E40',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studentCardAvatarText: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  studentCardDetails: {
+    flex: 1,
+    gap: 2,
+  },
+  studentCardName: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  studentCardEnrollment: {
+    fontSize: 10,
+    color: '#8b9bb4',
+    fontWeight: '700',
+  },
+  studentCardEnrollmentValue: {
+    color: '#FF7E40',
+  },
+  studentCardClassBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 4,
+  },
+  studentCardClassBadgeText: {
+    color: '#4b5563',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  statsCardContent: {
+    flex: 1,
+    gap: 6,
+  },
+  statsCardIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+  },
+  statsCardLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#8e8e93',
+    letterSpacing: 0.5,
+  },
+  statsCardValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  statsCardSubtext: {
+    fontSize: 10,
+    color: '#8e8e93',
+    fontWeight: '500',
+  },
+  aiInsightsSection: {
+    gap: 12,
+    marginTop: 8,
+  },
+  aiInsightsLabel: {
+    color: '#FF7E40',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  aiInsightsTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  aiInsightCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 12,
+  },
+  aiInsightIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiInsightText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  bottomTabBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    height: 60,
+    borderTopWidth: 1,
+    paddingBottom: 6,
+  },
+  tabBarItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    paddingVertical: 4,
+  },
+  tabBarLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  allModulesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  allModulesTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  allModulesCloseBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#ff7e40',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allModulesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  allModulesCard: {
+    width: (SCREEN_WIDTH - 52) / 3,
+    height: 96,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 8,
+    gap: 8,
+  },
+  allModulesIconBg: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  allModulesCardLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  popoverBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+  },
+  popoverCard: {
+    position: 'absolute',
+    right: 16,
+    width: 240,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    zIndex: 1000,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  popoverHeader: {
+    gap: 4,
+    marginBottom: 8,
+  },
+  popoverName: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  popoverEnrollment: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  popoverDivider: {
+    height: 1,
+    marginVertical: 10,
+  },
+  popoverItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    gap: 10,
+  },
+  popoverItemText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  
+  // --- PROFILE VIEW STYLES MATCHING MOCKUPS ---
+  profileHeaderCard: {
+    borderRadius: 24,
+    padding: 24,
+    gap: 12,
+    marginBottom: 16,
+  },
+  profileHeaderLabel: {
+    color: '#FF7E40',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  profileHeaderTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  profileHeaderDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9ca3af',
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  profileRefreshBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  profileRefreshBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  profileOverviewCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 20,
+    gap: 16,
+  },
+  profileOverviewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  profileAvatarContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  profileAvatarText: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '900',
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+  },
+  profileNameCol: {
+    flex: 1,
+    gap: 2,
+  },
+  profileUsernameText: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  profileFullNameText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  profileBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  profileBadgePill: {
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  profileBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  profileSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 10,
+    marginTop: 8,
+  },
+  profileDetailsCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+    gap: 16,
+  },
+  profileDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  detailIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 126, 64, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailTextContainer: {
+    flex: 1,
+    gap: 1,
+  },
+  detailItemLabel: {
+    fontSize: 8,
+    color: '#8e8e93',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  detailItemValueBold: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // --- CUSTOM DIALOGS AND NOTIFICATIONS STYLES ---
+  dialogOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
+  dialogBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  dialogCard: {
+    width: 280,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    gap: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  dialogHeader: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  dialogIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  dialogMessage: {
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  dialogActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  dialogBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dialogBtnCancel: {
+    borderWidth: 1,
+    backgroundColor: 'transparent',
+  },
+  dialogBtnCancelText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dialogBtnConfirm: {
+    backgroundColor: '#ef4444',
+  },
+  dialogBtnConfirmText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  notificationsCard: {
+    position: 'absolute',
+    right: 16,
+    width: 320,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    zIndex: 1000,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  notificationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  notificationsTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  notificationsCloseBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#ff7e40',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationItemCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 8,
+    gap: 4,
+  },
+  notificationItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  notificationItemTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    flex: 1,
+  },
+  notificationItemTime: {
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  notificationItemBody: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
+  },
+
+  // --- STUDY MATERIALS UNIFIED TABS & CHAPTERS ---
+  materialsTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 126, 64, 0.05)',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 126, 64, 0.1)',
+  },
+  materialsTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    height: 38,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  materialsTabBtnActive: {
+    backgroundColor: '#ff7e40',
+  },
+  materialsTabBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#8e8e93',
+  },
+  materialsTabBtnTextActive: {
+    color: '#ffffff',
+  },
+  chapterSectionWrapper: {
+    marginBottom: 20,
+  },
+  chapterHeaderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  chapterHeaderText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+
+  // --- PDF DOCUMENT READER CARD ---
+  pdfReaderCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 20,
+    gap: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  pdfReaderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingBottom: 10,
+  },
+  pdfReaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.1,
+  },
+  pdfReaderSub: {
+    fontSize: 10,
+    color: '#8e8e93',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  pdfCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pdfMockPageContainer: {
+    backgroundColor: '#0f172a',
+    paddingVertical: 20,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 240,
+    overflow: 'hidden',
+  },
+  pdfMockPage: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 18,
+    alignItems: 'center',
+    width: 170,
+    height: 200,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  pdfMockPageTextHeader: {
+    fontSize: 8,
+    fontWeight: '800',
+    textAlign: 'center',
+    color: '#1f2937',
+    marginBottom: 3,
+  },
+  pdfMockPageTextSub: {
+    fontSize: 6,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#9ca3af',
+    marginBottom: 10,
+  },
+  pdfMockLine: {
+    height: 3,
+    backgroundColor: '#e5e7eb',
+    width: '100%',
+    marginBottom: 5,
+    borderRadius: 2,
+  },
+  pdfPageNumberLabel: {
+    fontSize: 7,
+    fontWeight: '700',
+    color: '#9ca3af',
+    marginTop: 10,
+  },
+  pdfReaderControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  pdfZoomControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  pdfZoomBtn: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pdfZoomText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  pdfPageControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pdfPageNavBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ff7e40',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pdfPageIndicatorText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+    minWidth: 32,
+    textAlign: 'center',
   },
 });

@@ -119,34 +119,38 @@ export default function LoginScreen() {
     setError('Contact administrator to reset secret key.');
   };
 
+  // Colors matching the screenshot design precisely
+  const pageBg = isDarkMode ? '#090d16' : '#FAF8F5';
+  const cardBg = isDarkMode ? '#101726' : '#FFFFFF';
+  const cardBorder = isDarkMode ? '#1e293b' : 'transparent';
+  const brandTextColor = isDarkMode ? '#FFFFFF' : '#040b1e';
+  const labelTextColor = isDarkMode ? '#8b9bb4' : '#64748B';
+  const subtitleColor = isDarkMode ? '#8b9bb4' : '#64748B';
+  const inputBg = isDarkMode ? '#090d16' : '#F8F6F3';
+  const inputBorder = isDarkMode ? '#1e293b' : '#EBE9E6';
+  const inputText = isDarkMode ? '#FFFFFF' : '#040b1e';
+  const orangeBrandColor = '#FF8E29'; // Clean orange from screenshot
+
   return (
-    <LinearGradient colors={theme.bgGradient} style={styles.container}>
+    <View style={[styles.container, { backgroundColor: pageBg }]}>
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />
 
-      {/* Top Branding (matching the top-left mortarboard design in screenshot) */}
-      <View style={[styles.topBranding, { top: Math.max(insets.top, 12) }]}>
-        <View style={styles.brandingLogoSquare}>
-          <Ionicons name="school" size={16} color="#ffffff" />
-        </View>
-        <ThemedText style={[styles.brandingText, { color: isDarkMode ? '#fdf6ee' : '#4a2d1b' }]}>PATHFINDER</ThemedText>
-      </View>
-
-      {/* Theme Toggle Button (Glassmorphic) */}
+      {/* Theme Toggle Button (neat and floating) */}
       <Pressable
         onPress={toggleTheme}
         style={[
           styles.themeToggle,
           {
             top: Math.max(insets.top, 12),
-            backgroundColor: isDarkMode ? 'rgba(40, 27, 18, 0.4)' : 'rgba(255, 255, 255, 0.4)',
-            borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.4)',
+            backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+            borderColor: isDarkMode ? '#1e293b' : '#EBE9E6',
           },
         ]}
       >
         <FontAwesome
           name={isDarkMode ? 'sun-o' : 'moon-o'}
-          size={18}
-          color={isDarkMode ? '#ff7e40' : '#4a2d1b'}
+          size={16}
+          color={isDarkMode ? '#ff8e29' : '#040b1e'}
         />
       </Pressable>
 
@@ -159,27 +163,33 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Top Branding (Pathfinder logo) */}
+          <View style={styles.brandingHeader}>
+            <View style={styles.brandingLogoCircle}>
+              <Ionicons name="sunny" size={16} color="#ffffff" />
+            </View>
+            <ThemedText style={[styles.brandingHeaderText, { color: brandTextColor }]}>PATHFINDER</ThemedText>
+          </View>
+
+          {/* Login Card */}
           <View
             style={[
               styles.card,
               {
-                backgroundColor: theme.cardBg,
-                borderColor: theme.cardBorder,
+                backgroundColor: cardBg,
+                borderColor: cardBorder,
               },
             ]}
           >
-            {/* Center Logo Area in Card */}
-            <View style={styles.cardLogoWrapper}>
-              <View style={styles.cardLogoSquare}>
-                <Ionicons name="sunny" size={24} color="#ff7e40" />
-              </View>
+            {/* Orange circular badge with P */}
+            <View style={styles.pBadge}>
+              <ThemedText style={styles.pBadgeText}>P</ThemedText>
             </View>
 
             {/* Title & Subtitle */}
             <View style={styles.cardHeader}>
-              <ThemedText style={[styles.title, { color: isDarkMode ? '#fdf6ee' : '#4a2d1b' }]}>Sign In</ThemedText>
-              <View style={styles.underlineBar} />
-              <ThemedText style={styles.subtitle}>Ready to continue your journey?</ThemedText>
+              <ThemedText style={[styles.title, { color: brandTextColor }]}>Sign In</ThemedText>
+              <ThemedText style={[styles.subtitle, { color: subtitleColor }]}>Ready to continue your journey?</ThemedText>
             </View>
 
             {/* Error Message */}
@@ -190,25 +200,23 @@ export default function LoginScreen() {
             ) : null}
 
             <View style={styles.form}>
-              {/* Identity (Email/Username) Input */}
+              {/* Username Input */}
               <View style={styles.inputGroup}>
-                <ThemedText style={styles.label}>USERNAME</ThemedText>
+                <ThemedText style={[styles.label, { color: labelTextColor }]}>USERNAME</ThemedText>
                 <View
                   style={[
                     styles.inputWrapper,
                     {
-                      backgroundColor: theme.inputBg,
-                      borderColor: emailFocused ? theme.primary : theme.inputBorder,
+                      backgroundColor: inputBg,
+                      borderColor: emailFocused ? orangeBrandColor : inputBorder,
                     },
                   ]}
                 >
-                  <View style={styles.inputIcon}>
-                    <FontAwesome name="user-o" size={16} color={emailFocused ? theme.primary : '#9ca3af'} />
-                  </View>
+                  <Ionicons name="person-outline" size={18} color="#94A3B8" style={styles.inputIcon} />
                   <TextInput
-                    style={[styles.input, { color: isDarkMode ? '#fdf6ee' : '#4a2d1b' }]}
+                    style={[styles.input, { color: inputText }]}
                     placeholder="Your username"
-                    placeholderTextColor="#9ca3af"
+                    placeholderTextColor="#94A3B8"
                     keyboardType="email-address"
                     autoCapitalize="none"
                     value={email}
@@ -219,25 +227,23 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              {/* Secret Key (Password) Input */}
+              {/* Password Input */}
               <View style={styles.inputGroup}>
-                <ThemedText style={styles.label}>PASSWORD</ThemedText>
+                <ThemedText style={[styles.label, { color: labelTextColor }]}>PASSWORD</ThemedText>
                 <View
                   style={[
                     styles.inputWrapper,
                     {
-                      backgroundColor: theme.inputBg,
-                      borderColor: passwordFocused ? theme.primary : theme.inputBorder,
+                      backgroundColor: inputBg,
+                      borderColor: passwordFocused ? orangeBrandColor : inputBorder,
                     },
                   ]}
                 >
-                  <View style={styles.inputIcon}>
-                    <FontAwesome name="lock" size={18} color={passwordFocused ? theme.primary : '#9ca3af'} />
-                  </View>
+                  <Ionicons name="lock-closed-outline" size={18} color="#94A3B8" style={styles.inputIcon} />
                   <TextInput
-                    style={[styles.input, { color: isDarkMode ? '#fdf6ee' : '#4a2d1b', paddingRight: 40 }]}
+                    style={[styles.input, { color: inputText, paddingRight: 40 }]}
                     placeholder="Your password"
-                    placeholderTextColor="#9ca3af"
+                    placeholderTextColor="#94A3B8"
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     value={password}
@@ -249,16 +255,16 @@ export default function LoginScreen() {
                     style={styles.eyeButton}
                     onPress={() => setShowPassword(!showPassword)}
                   >
-                    <FontAwesome
-                      name={showPassword ? 'eye-slash' : 'eye'}
-                      size={16}
-                      color="#9ca3af"
+                    <Ionicons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={18}
+                      color="#94A3B8"
                     />
                   </Pressable>
                 </View>
               </View>
 
-              {/* Remember Me and Forgot row */}
+              {/* Extras Row */}
               <View style={styles.extrasRow}>
                 <Pressable
                   onPress={() => setRememberMe(!rememberMe)}
@@ -267,94 +273,53 @@ export default function LoginScreen() {
                   <View
                     style={[
                       styles.checkbox,
-                      { borderColor: theme.inputBorder },
-                      rememberMe && { backgroundColor: theme.primary, borderColor: theme.primary },
+                      { borderColor: isDarkMode ? '#1e293b' : '#EBE9E6' },
+                      rememberMe && { backgroundColor: orangeBrandColor, borderColor: orangeBrandColor },
                     ]}
                   >
-                    {rememberMe && <FontAwesome name="check" size={8} color="#ffffff" />}
+                    {rememberMe && <Ionicons name="checkmark" size={10} color="#ffffff" />}
                   </View>
-                  <ThemedText style={styles.checkboxLabel}>Remember Me</ThemedText>
+                  <ThemedText style={[styles.checkboxLabel, { color: labelTextColor }]}>Remember Me</ThemedText>
                 </Pressable>
 
                 <Pressable onPress={handleForgot}>
-                  <ThemedText style={styles.forgotText}>Forgot?</ThemedText>
+                  <ThemedText style={[styles.forgotText, { color: orangeBrandColor }]}>Forgot?</ThemedText>
                 </Pressable>
               </View>
 
-              {/* Submit Button */}
+              {/* Sign In Button */}
               <Pressable
                 onPress={handleLogin}
                 disabled={loading}
                 style={({ pressed }) => [
-                  styles.loginButtonContainer,
+                  styles.loginButton,
+                  { backgroundColor: orangeBrandColor },
                   pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
                   loading && { opacity: 0.7 },
                 ]}
               >
-                <LinearGradient
-                  colors={theme.btnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.loginButton}
-                >
-                  {loading ? (
-                    <View style={styles.loadingWrapper}>
-                      <ActivityIndicator size="small" color="#ffffff" />
-                      <ThemedText style={styles.loginButtonText}>AUTHORIZING...</ThemedText>
-                    </View>
-                  ) : (
-                    <View style={styles.btnContent}>
-                      <ThemedText style={styles.loginButtonText}>SECURE SIGN IN</ThemedText>
-                      <FontAwesome name="arrow-right" size={11} color="#ffffff" style={styles.arrowIcon} />
-                    </View>
-                  )}
-                </LinearGradient>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <ThemedText style={styles.loginButtonText}>Secure Sign In</ThemedText>
+                )}
               </Pressable>
             </View>
-
-            <View style={styles.cardFooter}>
-              <ThemedText style={styles.footerText}>
-                Empowering Tomorrow's Leaders © 2026
-              </ThemedText>
-            </View>
           </View>
+
+          {/* Footer Text */}
+          <ThemedText style={[styles.footerText, { color: labelTextColor }]}>
+            EMPOWERING TOMORROW'S LEADERS © 2026
+          </ThemedText>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topBranding: {
-    position: 'absolute',
-    left: 16,
-    zIndex: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  brandingLogoSquare: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#ff7e40',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#ff7e40',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  brandingText: {
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 0.5,
   },
   keyboardView: {
     flex: 1,
@@ -364,7 +329,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 80,
+    paddingVertical: 60,
   },
   themeToggle: {
     position: 'absolute',
@@ -376,66 +341,70 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 3,
   },
-  card: {
-    width: Math.min(SCREEN_WIDTH * 0.9, 400),
-    borderRadius: 48,
-    borderWidth: 1,
-    paddingTop: 36,
-    paddingHorizontal: 28,
-    paddingBottom: 28,
-    alignItems: 'stretch',
-    shadowColor: '#4a2d1b',
-    shadowOffset: { width: 0, height: 30 },
-    shadowOpacity: 0.06,
-    shadowRadius: 40,
-    elevation: 6,
-    overflow: 'hidden',
-  },
-  cardLogoWrapper: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  cardLogoSquare: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
+  brandingHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4a2d1b',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    gap: 10,
+    marginBottom: 24,
+  },
+  brandingLogoCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FF8E29',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandingHeaderText: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  card: {
+    width: Math.min(SCREEN_WIDTH * 0.9, 440),
+    borderRadius: 36,
+    borderWidth: 1,
+    paddingTop: 36,
+    paddingHorizontal: 36,
+    paddingBottom: 36,
+    alignItems: 'stretch',
+    shadowColor: '#040b1e',
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.04,
+    shadowRadius: 30,
     elevation: 4,
+    marginBottom: 24,
+  },
+  pBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FF8E29',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  pBadgeText: {
+    color: '#ffffff',
+    fontSize: 30,
+    fontWeight: '900',
   },
   cardHeader: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
+    gap: 6,
   },
   title: {
     fontSize: 26,
     fontWeight: '900',
-    letterSpacing: -0.5,
-    marginBottom: 6,
     textAlign: 'center',
   },
-  underlineBar: {
-    width: 28,
-    height: 2,
-    backgroundColor: '#ff7e40',
-    borderRadius: 1,
-    marginBottom: 12,
-  },
   subtitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6e7f8d',
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
   },
   errorBox: {
@@ -454,35 +423,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   form: {
-    gap: 18,
+    gap: 16,
   },
   inputGroup: {
-    gap: 8,
+    gap: 6,
   },
   label: {
     fontSize: 9,
     fontWeight: '900',
-    color: '#8b7a70',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     marginLeft: 4,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
+    borderRadius: 24,
     borderWidth: 1,
     height: 52,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
   },
   inputIcon: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   eyeButton: {
@@ -505,7 +471,7 @@ const styles = StyleSheet.create({
   checkbox: {
     width: 16,
     height: 16,
-    borderRadius: 5,
+    borderRadius: 4,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -513,55 +479,29 @@ const styles = StyleSheet.create({
   },
   checkboxLabel: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#6e7f8d',
+    fontWeight: '700',
   },
   forgotText: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#ff7e40',
-  },
-  loginButtonContainer: {
-    marginTop: 10,
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#ff7e40',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 6,
   },
   loginButton: {
-    height: 54,
+    height: 52,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  btnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: 10,
   },
   loginButtonText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-  arrowIcon: {
-    marginLeft: 6,
-  },
-  loadingWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardFooter: {
-    alignItems: 'center',
-    marginTop: 36,
+    letterSpacing: 0.5,
   },
   footerText: {
     fontSize: 9,
-    fontWeight: '700',
-    color: '#a0aebc',
+    fontWeight: '900',
+    letterSpacing: 1,
+    textAlign: 'center',
   },
 });
