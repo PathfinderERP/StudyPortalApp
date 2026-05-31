@@ -3,24 +3,40 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-import '../global.css';
+// import '../global.css';
 
 import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#4a2d1b', // Dark brown
+    background: '#fdf6ee',
+    backgroundElement: '#f5ebe0',
+    backgroundSelected: '#e3d5ca',
+    textSecondary: '#6e7f8d', // Muted steel blue/gray
+    bgGradient: ['#fdf3e7', '#fdfbf7'], // Cream/beige gradient
+    cardBg: '#ffffff',
+    cardBorder: 'rgba(255, 255, 255, 0.9)',
+    inputBg: '#fffdfb',
+    inputBorder: '#f2e8df',
+    btnGradient: ['#ff7e40', '#ff9865'], // Orange gradient
+    btnText: '#ffffff',
+    primary: '#ff7e40', // Pathfinder Orange
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#fdf6ee',
+    background: '#1a120b',
+    backgroundElement: '#2c1e13',
+    backgroundSelected: '#3c2a1a',
+    textSecondary: '#a59489',
+    bgGradient: ['#1e140f', '#120b08'],
+    cardBg: 'rgba(40, 27, 18, 0.85)',
+    cardBorder: 'rgba(255, 255, 255, 0.1)',
+    inputBg: 'rgba(20, 12, 8, 0.5)',
+    inputBorder: 'rgba(92, 70, 55, 0.5)',
+    btnGradient: ['#ff7e40', '#ff9865'],
+    btnText: '#ffffff',
+    primary: '#ff7e40',
   },
 };
 

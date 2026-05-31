@@ -1,10 +1,55 @@
-import { Tabs } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { storage } from '../utils/storage';
+import { ActivityIndicator, View } from 'react-native';
 
-export default function TabLayout() {
+export default function RootLayout() {
+  const router = useRouter();
+  const segments = useSegments();
+  const [loading, setLoading] = useState(true);
+  const [hasToken, setHasToken] = useState(false);
+
+  useEffect(() => {
+    async function checkAuthToken() {
+      try {
+        const token = await storage.getItem('userToken');
+        setHasToken(!!token);
+      } catch (err) {
+        console.error('Error reading auth token:', err);
+        setHasToken(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkAuthToken();
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const inDashboard = segments[0] === 'dashboard';
+
+    if (!hasToken && inDashboard) {
+      // If not logged in and trying to access dashboard, redirect to login
+      router.replace('/');
+    } else if (hasToken && !inDashboard) {
+      // If logged in and on the login/landing screen, redirect to dashboard
+      router.replace('/dashboard');
+    }
+  }, [hasToken, segments, loading]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fdf6ee' }}>
+        <ActivityIndicator size="large" color="#ff7e40" />
+      </View>
+    );
+  }
+
   return (
-    <Tabs>
-      <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
-    </Tabs>
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </SafeAreaProvider>
   );
 }

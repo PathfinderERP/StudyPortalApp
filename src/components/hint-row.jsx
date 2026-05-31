@@ -1,10 +1,10 @@
 
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { ThemedText } from './themed-text.jsx';
-import { ThemedView } from './themed-view.jsx';
+import { ThemedText } from './themed-text';
+import { ThemedView } from './themed-view';
 
-import { Spacing } from '../constants/theme.js';
+import { Spacing } from '../constants/theme';
 
 
 

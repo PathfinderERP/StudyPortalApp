@@ -1,7 +1,7 @@
 import { Platform, StyleSheet, Text } from 'react-native';
 
-import { Fonts, ThemeColor } from '../constants/theme.js';
-import { useTheme } from '../hooks/use-theme.js';
+import { Fonts } from '../constants/theme';
+import { useTheme } from '../hooks/use-theme';
 
 
 

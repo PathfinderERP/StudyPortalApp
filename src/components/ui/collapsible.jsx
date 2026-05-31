@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { ThemedText } from '../themed-text.jsx';
-import { ThemedView } from '../themed-view.jsx';
-import { Spacing } from '../../constants/theme.js';
-import { useTheme } from '../../hooks/use-theme.js';
+import { Spacing } from '../../constants/theme';
+import { useTheme } from '../../hooks/use-theme';
+import { ThemedText } from '../themed-text';
+import { ThemedView } from '../themed-view';
 
 export function Collapsible({ children, title }) {
   const [isOpen, setIsOpen] = useState(false);

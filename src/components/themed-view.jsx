@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 
-import { ThemeColor } from '../constants/theme.js';
-import { useTheme } from '../hooks/use-theme.js';
+import { useTheme } from '../hooks/use-theme';
 
 
 

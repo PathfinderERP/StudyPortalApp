@@ -1,8 +1,8 @@
-import { Tabs } from 'expo-router';
-import { useColorScheme, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
-import { Colors } from '../constants/theme.js';
+import { Colors } from '../constants/theme';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
